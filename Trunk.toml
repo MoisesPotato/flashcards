@@ -1,0 +1,3 @@
+[build]
+# html_output = "flashcards.html"  # The name of the output HTML file.
+minify = "on_release"            # Control minification: can be one of: never, on_release, always
