@@ -9,10 +9,13 @@ codegen-units = 1
 lto = true
 
 [dependencies]
+anyhow = "1.0.104"
 console_error_panic_hook = "0.1.7"
 console_log = "1.1.0"
+getrandom = { version = "0.4.3", features = ["wasm_js"] }
 leptos = { version = "0.8", features = ["csr", "nightly"] }
 log = "0.4.35"
+rand = "0.10.3"
 # gloo-timers = { version = "0.3.0", features = ["futures"] }
 # web-sys = { version = "0.3", features = [
 #     "HtmlInputElement",
