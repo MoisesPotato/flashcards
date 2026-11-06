@@ -108,6 +108,16 @@ impl Item {
 }
 
 impl Data {
+    pub fn get_prompt(&self, i: usize) -> String {
+        let item = &self.questions[i];
+        let prompt = &self.prompts[item.prompt_index];
+        item.prompt_string(prompt)
+    }
+
+    pub fn get_mut_item(&mut self, i: usize) -> &mut Item {
+        &mut self.questions[i]
+    }
+
     pub fn default() -> Self {
         let str = include_str!("data.quiz");
 
@@ -301,7 +311,7 @@ impl Data {
         }
     }
 
-    pub fn pick_one(&self) -> (Item, String) {
+    pub fn pick_one(&self) -> usize {
         let total_weight: f32 = self
             .questions
             .iter()
@@ -312,11 +322,10 @@ impl Data {
 
         let mut so_far = 0.;
 
-        for c in &self.questions {
+        for (i, c) in self.questions.iter().enumerate() {
             so_far += c.weight(self.very_recent, self.recent);
             if so_far >= chosen {
-                let prompt = self.prompts[c.prompt_index].clone();
-                return (c.clone(), prompt);
+                return i;
             }
         }
 

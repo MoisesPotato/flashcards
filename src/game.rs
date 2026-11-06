@@ -1,4 +1,4 @@
-use leptos::{ev::SubmitEvent, html, prelude::*};
+use leptos::{either::EitherOf4, ev::SubmitEvent, html, prelude::*};
 
 use crate::data::{
     Data, Item,
@@ -17,17 +17,28 @@ enum AnswerStatus {
 pub fn Game(data: RwSignal<Data>) -> impl IntoView {
     let question = RwSignal::new(data.with_untracked(super::data::Data::pick_one));
 
-    let (answer, set_answer) = signal(AnswerStatus::None);
+    let (status, set_status) = signal(AnswerStatus::None);
 
-    move || match answer() {
-        AnswerStatus::None => view! { {prompt(set_answer, question)} },
-        x => todo!("{x:?}"),
+    let preanswer = move || match status() {
+        AnswerStatus::None => EitherOf4::A(()),
+        AnswerStatus::Almost => EitherOf4::B(view! { <p>"Almost!"</p> }),
+        AnswerStatus::Correct => EitherOf4::C(view! {<p>"Correct!"</p>}),
+        AnswerStatus::Wrong { correct } => EitherOf4::D(view! {<p>"Wrong!"</p>}),
+    };
+
+    let streak = RwSignal::new(0);
+
+    view! {
+        {preanswer}
+        {prompt(set_status, question, data, streak)}
     }
 }
 
 fn prompt(
     set_answer: WriteSignal<AnswerStatus>,
-    question: RwSignal<(Item, String)>,
+    question: RwSignal<usize>,
+    data: RwSignal<Data>,
+    streak: RwSignal<usize>,
 ) -> impl IntoView {
     let input_element: NodeRef<html::Input> = NodeRef::new();
 
@@ -36,25 +47,40 @@ fn prompt(
         ev.prevent_default();
 
         // here, we'll extract the value from the input
-        let answer = input_element
-            .get()
-            .expect("<input> should be mounted")
-            .value();
+        let element = input_element.get().expect("<input> should be mounted");
 
-        match question.with(|(item, _)| item.check(&answer)) {
-            Correct => log::error!("Todo correct"),
-            Almost => log::error!("Todo almost"),
-            Wrong => log::error!("Todo wrong"),
-        }
+        let answer = element.value();
+
+        element.set_value("");
+
+        data.update(move |data| {
+            let item = data.get_mut_item(question());
+            match item.check(&answer) {
+                Correct => {
+                    item.streak += 1;
+                    streak.update(|s| *s += 1);
+                    item.attempts += 1;
+                    item.last_attempt = 0;
+                    set_answer(AnswerStatus::Correct);
+                    question.set(data.pick_one());
+                }
+                Almost => {
+                    set_answer(AnswerStatus::Almost);
+                }
+                Wrong => log::error!("Todo wrong"),
+            }
+        });
     };
 
+    let prompt = move || data.with(move |d| d.get_prompt(question()));
+
     view! {
-        <div class="card">
-            <h1>{move || question.with(|q| q.0.prompt_string(&q.1))}</h1>
-            <form on:submit=on_submit>
-                <input node_ref=input_element type="text" />
-                <input type="submit" on:submit=on_submit />
-            </form>
-        </div>
+            <div class="card">
+                <h1>{prompt}</h1>
+                <form on:submit=on_submit>
+                    <input node_ref=input_element type="text" />
+                    <input type="submit" on:submit=on_submit />
+                </form>
+            </div>
     }
 }
