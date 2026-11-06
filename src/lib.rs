@@ -13,6 +13,7 @@ use crate::{data::Data, game::Game};
 
 mod data;
 mod game;
+mod strings;
 
 #[derive(Clone, Copy)]
 enum Screen {

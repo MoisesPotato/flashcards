@@ -6,8 +6,11 @@ use std::{
     str::FromStr,
 };
 
+use Outcome::*;
 use anyhow::anyhow;
 use rand::{RngExt, rng};
+
+use crate::strings::{Reuse, distance};
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct Data {
@@ -27,7 +30,29 @@ pub struct Item {
     pub last_attempt: usize,
     pub streak: usize,
 }
+
+pub enum Outcome {
+    Correct,
+    Almost,
+    Wrong,
+}
+
 impl Item {
+    pub fn check(&self, answer: &str) -> Outcome {
+        let mut almost = false;
+        for correct in self.answers.split('/') {
+            let correct = correct.to_lowercase();
+            if correct == answer {
+                return Correct;
+            }
+            let bound = u8::try_from(correct.chars().count().div_ceil(5)).unwrap();
+            if distance(&correct, answer, &mut Reuse::new()) <= bound {
+                almost = true;
+            }
+        }
+        if almost { Almost } else { Wrong }
+    }
+
     const fn score(&self) -> Score {
         Score {
             attempts: self.attempts,
