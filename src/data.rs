@@ -6,7 +6,7 @@ use std::{
     str::FromStr,
 };
 
-use Outcome::*;
+use Outcome::{Almost, Correct, Wrong};
 use anyhow::anyhow;
 use rand::{RngExt, rng};
 
@@ -205,7 +205,7 @@ impl Data {
         })
     }
 
-    pub fn show_stats(&self) {
+    pub fn _show_stats(&self) {
         const N_WORST: usize = 10;
 
         let mut worst: BTreeMap<(Score, &str), &Item> = BTreeMap::new();
@@ -330,6 +330,14 @@ impl Data {
         }
 
         unreachable!("Weight too big")
+    }
+
+    pub(crate) fn step_all(&mut self) {
+        for i in &mut self.questions {
+            if i.attempts < self.recent {
+                i.attempts += 1;
+            }
+        }
     }
 }
 

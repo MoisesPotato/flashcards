@@ -1,7 +1,7 @@
 use leptos::{either::EitherOf4, ev::SubmitEvent, html, prelude::*};
 
 use crate::data::{
-    Data, Item,
+    Data,
     Outcome::{Almost, Correct, Wrong},
 };
 
@@ -21,9 +21,11 @@ pub fn Game(data: RwSignal<Data>) -> impl IntoView {
 
     let preanswer = move || match status() {
         AnswerStatus::None => EitherOf4::A(()),
-        AnswerStatus::Almost => EitherOf4::B(view! { <p>"Almost!"</p> }),
-        AnswerStatus::Correct => EitherOf4::C(view! {<p>"Correct!"</p>}),
-        AnswerStatus::Wrong { correct } => EitherOf4::D(view! {<p>"Wrong!"</p>}),
+        AnswerStatus::Almost => EitherOf4::B(view! { <p>"Almost! Try again"</p> }),
+        AnswerStatus::Correct => EitherOf4::C(view! { <p>"Correct!"</p> }),
+        AnswerStatus::Wrong { correct } => {
+            EitherOf4::D(view! { <p>"Wrong! The correct answer was " {correct}</p> })
+        }
     };
 
     let streak = RwSignal::new(0);
@@ -59,28 +61,38 @@ fn prompt(
                 Correct => {
                     item.streak += 1;
                     streak.update(|s| *s += 1);
-                    item.attempts += 1;
-                    item.last_attempt = 0;
                     set_answer(AnswerStatus::Correct);
-                    question.set(data.pick_one());
                 }
                 Almost => {
                     set_answer(AnswerStatus::Almost);
+                    // Try again
+                    return;
                 }
-                Wrong => log::error!("Todo wrong"),
+                Wrong => {
+                    item.streak = 0;
+                    streak.set(0);
+                    set_answer(AnswerStatus::Wrong {
+                        correct: item.answers.clone(),
+                    });
+                }
             }
+            // Reset
+            item.attempts += 1;
+            item.last_attempt = 0;
+            data.step_all();
+            question.set(data.pick_one());
         });
     };
 
     let prompt = move || data.with(move |d| d.get_prompt(question()));
 
     view! {
-            <div class="card">
-                <h1>{prompt}</h1>
-                <form on:submit=on_submit>
-                    <input node_ref=input_element type="text" />
-                    <input type="submit" on:submit=on_submit />
-                </form>
-            </div>
+        <div class="card">
+            <h1>{prompt}</h1>
+            <form on:submit=on_submit>
+                <input node_ref=input_element type="text" />
+                <input type="submit" on:submit=on_submit />
+            </form>
+        </div>
     }
 }

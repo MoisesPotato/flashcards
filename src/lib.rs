@@ -2,7 +2,8 @@
 #![allow(
     clippy::must_use_candidate,
     clippy::cast_precision_loss,
-    clippy::empty_enums
+    clippy::empty_enums,
+    clippy::suboptimal_flops
 )]
 
 use leptos::{either::Either, prelude::*};
