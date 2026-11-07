@@ -1,0 +1,33 @@
+.card {
+    position: absolute;
+    transform: translate(-50%, -50%);
+    top: 50%;
+    left: 50%;
+    padding: 1em 1em 1em 1em;
+    border-radius: 0.5em;
+    border: 1px solid gray;
+    box-shadow: 0.2em 0.2em gray;
+    background: aliceblue;
+}
+
+.card h1 {
+    font-family: sans-serif;
+}
+
+body {
+    background: beige;
+}
+
+.card input {
+    width: 93px;
+}
+
+.card form {
+    display: flex;
+    flex-direction: row;
+    justify-content: center;
+}
+
+.card input {
+    margin: 10px;
+}

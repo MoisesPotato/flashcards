@@ -91,7 +91,7 @@ fn prompt(
             <h1>{prompt}</h1>
             <form on:submit=on_submit>
                 <input node_ref=input_element type="text" />
-                <input type="submit" on:submit=on_submit />
+                <input type="submit" value="Enter" on:submit=on_submit />
             </form>
         </div>
     }
