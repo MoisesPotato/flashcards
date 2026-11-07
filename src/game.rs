@@ -16,6 +16,7 @@ enum AnswerStatus {
 #[component]
 pub fn Game(data: RwSignal<Data>) -> impl IntoView {
     let question = RwSignal::new(data.with_untracked(super::data::Data::pick_one));
+    let prev_question = RwSignal::new(None);
 
     let (status, set_status) = signal(AnswerStatus::None);
 
@@ -30,18 +31,30 @@ pub fn Game(data: RwSignal<Data>) -> impl IntoView {
 
     let streak = RwSignal::new(0);
 
+    let prev_and_current = move || [Some(question()), prev_question()].into_iter().flatten();
+
     view! {
-        {preanswer}
-        {prompt(set_status, question, data, streak)}
+        // {preanswer}
+        <ForEnumerate
+            each=prev_and_current
+            key=|i| *i
+            children={//
+                move |index: ReadSignal<usize>, id: usize| {
+                prompt(set_status, id, data, streak, index)
+            }}
+        />
     }
 }
 
 fn prompt(
     set_answer: WriteSignal<AnswerStatus>,
-    question: RwSignal<usize>,
+    question: usize,
     data: RwSignal<Data>,
     streak: RwSignal<usize>,
+    index: ReadSignal<usize>,
 ) -> impl IntoView {
+    let old = move || index() == 1;
+
     let input_element: NodeRef<html::Input> = NodeRef::new();
 
     let on_submit = move |ev: SubmitEvent| {
@@ -56,7 +69,7 @@ fn prompt(
         element.set_value("");
 
         data.update(move |data| {
-            let item = data.get_mut_item(question());
+            let item = data.get_mut_item(question);
             match item.check(&answer) {
                 Correct => {
                     item.streak += 1;
@@ -80,19 +93,29 @@ fn prompt(
             item.attempts += 1;
             item.last_attempt = 0;
             data.step_all();
-            question.set(data.pick_one());
+            // question.set(data.pick_one());
         });
     };
 
-    let prompt = move || data.with(move |d| d.get_prompt(question()));
+    let prompt = move || data.with(move |d| d.get_prompt(question));
 
     view! {
-        <div class="card">
+        <div class="card" class:old=old>
             <h1>{prompt}</h1>
-            <form on:submit=on_submit>
-                <input node_ref=input_element type="text" />
-                <input type="submit" value="Enter" on:submit=on_submit />
-            </form>
+            {move || {
+                if old() {
+                    None
+                } else {
+                    Some(
+                        view! {
+                            <form on:submit=on_submit>
+                                <input node_ref=input_element type="text" />
+                                <input type="submit" value="Enter" on:submit=on_submit />
+                            </form>
+                        },
+                    )
+                }
+            }}
         </div>
     }
 }
