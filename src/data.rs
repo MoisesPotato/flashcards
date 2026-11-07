@@ -53,6 +53,8 @@ impl Item {
         if almost { Almost } else { Wrong }
     }
 
+    // TODO
+    #[allow(unused)]
     const fn score(&self) -> Score {
         Score {
             attempts: self.attempts,

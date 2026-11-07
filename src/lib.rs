@@ -6,14 +6,24 @@
     clippy::suboptimal_flops
 )]
 
-use leptos::{either::Either, prelude::*};
+use leptos::{
+    either::Either,
+    logging::{debug_log, error},
+    prelude::*,
+};
 
 use Screen::{MainMenu, Playing};
+use web_sys::console;
 
-use crate::{data::Data, game::Game};
+use crate::{
+    data::Data,
+    game::Game,
+    storage::{get_saved, save},
+};
 
 mod data;
 mod game;
+mod storage;
 mod strings;
 
 #[derive(Clone, Copy)]
@@ -26,7 +36,32 @@ enum Screen {
 pub fn App() -> impl IntoView {
     let (screen, set_screen) = signal(Screen::MainMenu);
 
-    let data = RwSignal::new(Data::default());
+    let data = get_saved().map_or_else(
+        |err| {
+            error!("Failed to get data, error:");
+            console::log_1(&err);
+            Data::default()
+        },
+        |result| {
+            if !result.errors.is_empty() {
+                error!("Had these errores getting data:");
+                for err in &result.errors {
+                    error!("{err}");
+                }
+            }
+            result.data
+        },
+    );
+
+    let data = RwSignal::new(data);
+
+    Effect::new(move |_| match data.with(save) {
+        Ok(()) => debug_log!("Saved data to local storage"),
+        Err(err) => {
+            error!("Error saving data");
+            console::log_1(&err);
+        }
+    });
 
     move || match screen() {
         MainMenu => {
