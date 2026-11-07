@@ -116,6 +116,10 @@ impl Data {
         item.prompt_string(prompt)
     }
 
+    pub fn get_item(&self, i: usize) -> &Item {
+        &self.questions[i]
+    }
+
     pub fn get_mut_item(&mut self, i: usize) -> &mut Item {
         &mut self.questions[i]
     }

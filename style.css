@@ -10,6 +10,28 @@
     background: aliceblue;
 }
 
+.card.old {
+    transform: rotate(-34deg) translate(-86px, -420px);
+    transform-origin: top;
+    z-index: -1;
+    transition: transform 0.5s;
+}
+
+@keyframes appear {
+    from {
+        left: 100%
+    }
+
+    to {
+        left: 50%
+    }
+}
+
+.card {
+    animation: appear 300ms ease-in-out;
+}
+
+
 .card h1 {
     font-family: sans-serif;
 }
