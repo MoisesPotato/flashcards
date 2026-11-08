@@ -1,10 +1,4 @@
-use leptos::{
-    either::EitherOf3,
-    ev::SubmitEvent,
-    html,
-    logging::{debug_log, error},
-    prelude::*,
-};
+use leptos::{either::EitherOf3, ev::SubmitEvent, html, logging::error, prelude::*};
 use web_sys::{HtmlElement, console};
 
 use crate::data::{
@@ -81,32 +75,6 @@ pub fn Game(data: RwSignal<Data>) -> impl IntoView {
         }
     });
 
-    view! {
-        // {preanswer}
-        <p class="streak">"Streak: "{streak}</p>
-        <ForEnumerate
-            each=prev_and_current
-            key=|i| *i
-            children={move |index: ReadSignal<usize>, id: usize| {
-                card(set_answer, id, data, index, almost, prev_question)
-            }}
-        />
-    }
-}
-
-fn card(
-    set_answer: WriteSignal<Option<String>>,
-    question: usize,
-    data: RwSignal<Data>,
-    index: ReadSignal<usize>,
-    almost: ReadSignal<bool>,
-    prev_question: RwSignal<AnswerStatus>,
-) -> impl IntoView {
-    let old = move || index() == 1;
-
-    let correct = move || old() && matches!(prev_question.get(), AnswerStatus::Correct(_));
-    let wrong = move || old() && matches!(prev_question.get(), AnswerStatus::Wrong(_));
-
     let input_element: NodeRef<html::Input> = NodeRef::new();
 
     let on_submit = move |ev: SubmitEvent| {
@@ -123,8 +91,6 @@ fn card(
         set_answer(Some(answer));
     };
 
-    let prompt = move || data.with(move |d| d.get_prompt(question));
-
     Effect::new(move |_| {
         if let Some(node) = input_element.get()
             && let Err(err) = node.focus()
@@ -133,6 +99,40 @@ fn card(
             console::log_1(&err);
         }
     });
+
+    view! {
+        // {preanswer}
+        <p class="streak">"Streak: "{streak}</p>
+        <ForEnumerate
+            each=prev_and_current
+            key=|i| *i
+            children={move |index: ReadSignal<usize>, id: usize| {
+                card(id, data, index, prev_question)
+            }}
+        />
+        <form on:submit=on_submit class="answer-box">
+            <input
+                node_ref=input_element
+                type="text"
+                placeholder={move || if almost() { "Almost!" } else { "" }}
+            />
+            <input type="submit" value="Enter" on:submit=on_submit />
+        </form>
+    }
+}
+
+fn card(
+    question: usize,
+    data: RwSignal<Data>,
+    index: ReadSignal<usize>,
+    prev_question: RwSignal<AnswerStatus>,
+) -> impl IntoView {
+    let old = move || index() == 1;
+
+    let correct = move || old() && matches!(prev_question.get(), AnswerStatus::Correct(_));
+    let wrong = move || old() && matches!(prev_question.get(), AnswerStatus::Wrong(_));
+
+    let prompt = move || data.with(move |d| d.get_prompt(question));
 
     let question_elt: NodeRef<html::H1> = NodeRef::new();
 
@@ -150,8 +150,6 @@ fn card(
             let width = rect.width();
 
             let target_width = 600.;
-
-            debug_log!("Width {width}");
 
             let font_size = (target_width / width).clamp(0., 2.);
 
@@ -205,21 +203,6 @@ fn card(
 
             <h1 node_ref=question_elt>{prompt}</h1>
             {summary}
-            {move || {
-                if old() {
-                    None
-                } else {
-                    Some(
-                        view! {
-                            <form on:submit=on_submit>
-                                <input node_ref=input_element type="text" />
-                                <input type="submit" value="Enter" on:submit=on_submit />
-                            </form>
-                            {move || if almost() { Some(view! { <p>"Almost!"</p> }) } else { None }}
-                        },
-                    )
-                }
-            }}
         </div>
     }
 }

@@ -6,11 +6,7 @@
     clippy::suboptimal_flops
 )]
 
-use leptos::{
-    either::Either,
-    logging::{debug_log, error},
-    prelude::*,
-};
+use leptos::{either::Either, logging::error, prelude::*};
 
 use Screen::{MainMenu, Playing};
 use web_sys::console;
@@ -56,7 +52,7 @@ pub fn App() -> impl IntoView {
     let data = RwSignal::new(data);
 
     Effect::new(move |_| match data.with(save) {
-        Ok(()) => debug_log!("Saved data to local storage"),
+        Ok(()) => {} //debug_log!("Saved data to local storage"),
         Err(err) => {
             error!("Error saving data");
             console::log_1(&err);
