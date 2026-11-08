@@ -17,6 +17,19 @@ enum AnswerStatus {
 pub fn Game(data: RwSignal<Data>) -> impl IntoView {
     let question = RwSignal::new(data.with_untracked(super::data::Data::pick_one));
     let prev_question = RwSignal::new(AnswerStatus::None);
+    let prev_prev_question = RwSignal::new(AnswerStatus::None);
+
+    // Probably unnecessary
+    // Effect::new(move |_| {
+    //     if !matches!(prev_prev_question.get(), AnswerStatus::None) {
+    //         set_timeout(
+    //             move || {
+    //                 prev_prev_question.set(AnswerStatus::None);
+    //             },
+    //             std::time::Duration::from_millis(1_000),
+    //         );
+    //     }
+    // });
 
     let streak = RwSignal::new(0);
 
@@ -24,6 +37,10 @@ pub fn Game(data: RwSignal<Data>) -> impl IntoView {
         [
             Some(question()),
             match prev_question.get() {
+                AnswerStatus::Correct(i) | AnswerStatus::Wrong(i) => Some(i),
+                AnswerStatus::None => None,
+            },
+            match prev_prev_question.get() {
                 AnswerStatus::Correct(i) | AnswerStatus::Wrong(i) => Some(i),
                 AnswerStatus::None => None,
             },
@@ -53,12 +70,14 @@ pub fn Game(data: RwSignal<Data>) -> impl IntoView {
                     Correct => {
                         item.streak += 1;
                         streak.update(|s| *s += 1);
+                        prev_prev_question.set(prev_question.get());
                         prev_question.set(AnswerStatus::Correct(question()));
                     }
                     Almost => unreachable!("Already checked"),
                     Wrong => {
                         item.streak = 0;
                         streak.set(0);
+                        prev_prev_question.set(prev_question.get());
                         prev_question.set(AnswerStatus::Wrong(question()));
                     }
                 }
@@ -127,7 +146,7 @@ fn card(
     index: ReadSignal<usize>,
     prev_question: RwSignal<AnswerStatus>,
 ) -> impl IntoView {
-    let old = move || index() == 1;
+    let old = move || index() > 0;
 
     let correct = move || old() && matches!(prev_question.get(), AnswerStatus::Correct(_));
     let wrong = move || old() && matches!(prev_question.get(), AnswerStatus::Wrong(_));
@@ -183,6 +202,7 @@ fn card(
             class:new=move || !old()
             class:correct=correct
             class:wrong=wrong
+            class:leaving={move || index() > 1}
         >
             {move || {
                 if correct() {
