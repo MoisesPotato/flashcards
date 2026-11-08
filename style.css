@@ -5,13 +5,17 @@
     left: 50%;
     padding: 1em 1em 1em 1em;
     border-radius: 0.5em;
-    border: 1px solid gray;
-    box-shadow: 0.2em 0.2em gray;
-    background: aliceblue;
+    width: 320px;
+    height: 160px;
+    align-content: center;
+    background: hsl(105, 78%.79%);
+    background: linear-gradient(90deg, hsl(70, 78%, 79%) 0%, hsl(140, 78%, 79%) 100%);
+    box-shadow: -7px -7px 6px hsla(105, 35%, 20%, 0.7);
+    border: none;
 }
 
 .card.old {
-    transform: rotate(-34deg) translate(-86px, -420px);
+    transform: rotate(-29deg) translate(-156px, -382px);
     transform-origin: top;
     z-index: -1;
     transition: transform 0.7s ease-in-out, background-color 0.7s ease-in-out;
@@ -44,6 +48,7 @@
 
 .card h1 {
     font-family: sans-serif;
+    width: fit-content;
 }
 
 body {
@@ -65,9 +70,7 @@ body {
 }
 
 .card.correct {
-    background: lime;
-    border: green;
-    box-shadow: 0.2em 0.2em green;
+    background: linear-gradient(90deg, hsl(90, 95%, 64%) 0%, hsl(150, 95%, 64%) 100%);
 }
 
 .card.wrong {
@@ -81,4 +84,14 @@ body {
     background-color: white;
     width: 100%;
     left: 0;
+}
+
+.card h1 {
+    font-size: var(--font-size, 1em);
+}
+
+.correct_wrong {
+    position: absolute;
+    top: -2px;
+    color: #600;
 }

@@ -5,7 +5,7 @@ use leptos::{
     logging::{debug_log, error},
     prelude::*,
 };
-use web_sys::console;
+use web_sys::{HtmlElement, console};
 
 use crate::data::{
     Data,
@@ -78,8 +78,6 @@ pub fn Game(data: RwSignal<Data>) -> impl IntoView {
                 // New question
                 question.set(data.pick_one());
             });
-        } else {
-            debug_log!("Got no answer");
         }
     });
 
@@ -136,6 +134,36 @@ fn card(
         }
     });
 
+    let question_elt: NodeRef<html::H1> = NodeRef::new();
+
+    Effect::new(move |_| {
+        if let Some(node) = question_elt.get() {
+            //  if (!el.parentElement) return;
+            if let Err(err) = HtmlElement::style(&node).set_property("--font-size", "1em") {
+                error!("Error setting font size:");
+                console::log_1(&err);
+                return;
+            }
+
+            let rect = node.get_bounding_client_rect();
+
+            let width = rect.width();
+
+            let target_width = 600.;
+
+            debug_log!("Width {width}");
+
+            let font_size = (target_width / width).clamp(0., 2.);
+
+            if let Err(err) =
+                HtmlElement::style(&node).set_property("--font-size", &format!("{font_size}em"))
+            {
+                error!("Error setting font size:");
+                console::log_1(&err);
+            }
+        }
+    });
+
     let summary = move || {
         if old() {
             let item = data.with(move |d| d.get_item(question).clone());
@@ -145,15 +173,6 @@ fn card(
             Some(
                 view! { <div class="summary">"Overall: "{correct}"/"{total}", Streak "{streak}</div> },
             )
-        } else {
-            None
-        }
-    };
-
-    let correct_answer = move || {
-        let correct_answer = data.with(move |d| d.get_item(question).answers.clone());
-        if old() && matches!(prev_question(), AnswerStatus::Wrong(_)) {
-            Some(view! {<p class="fix_answer">"The correct answer was "{correct_answer}</p>})
         } else {
             None
         }
@@ -171,14 +190,20 @@ fn card(
                 if correct() {
                     EitherOf3::A(view! { <p class="correct_wrong">"Correct!"</p> })
                 } else if wrong() {
-                    EitherOf3::B(view! { <p class="correct_wrong">"Wrong!"</p> })
+                    let correct_answer = data.with(move |d| d.get_item(question).answers.clone());
+                    EitherOf3::B(
+                        view! {
+                            <p class="correct_wrong">
+                                "Wrong! The correct answer was "{correct_answer}
+                            </p>
+                        },
+                    )
                 } else {
                     EitherOf3::C(())
                 }
             }}
-            {correct_answer}
 
-            <h1>{prompt}</h1>
+            <h1 node_ref=question_elt>{prompt}</h1>
             {summary}
             {move || {
                 if old() {

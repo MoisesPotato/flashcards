@@ -5,7 +5,7 @@ Albania,Tirana
 Algeria,Algiers
 Andorra,Andorra la Vella
 Angola,Luanda
-Antigua and Barbuda,Saint John's
+Antigua and Barbuda,Saint John's/St John's
 Argentina,Buenos Aires
 Armenia,Yerevan
 Australia,Canberra
@@ -69,7 +69,7 @@ Georgia,Tbilisi
 Germany,Berlin
 Ghana,Accra
 Greece,Athens
-Grenada,Saint George's
+Grenada,Saint George's/St George's
 Guatemala,Guatemala City
 Guinea,Conakry
 Guinea-Bissau,Bissau
@@ -190,7 +190,7 @@ United States,Washington D.C.
 Uruguay,Montevideo
 Uzbekistan,Tashkent
 Vanuatu,Port Vila
-Vatican City,Vatican City
+Vatican City,Vatican City/Vatican
 Venezuela,Caracas
 Vietnam,Hanoi
 Yemen,Sana'a
@@ -229,13 +229,13 @@ Zimbabwe,Harare
 🇨🇲,Cameroon
 🇨🇦,Canada
 🇨🇻,Cape Verde
-🇨🇫,Central African Republic
+🇨🇫,Central African Republic/CAR
 🇹🇩,Chad
 🇨🇱,Chile
 🇨🇳,China
 🇨🇴,Colombia
 🇰🇲,Comoros
-🇨🇩,Democratic Republic of the Congo
+🇨🇩,Democratic Republic of the Congo/DRC/DR Congo
 🇨🇬,Republic of the Congo
 🇨🇷,Costa Rica
 🇨🇮,Ivory Coast
@@ -342,9 +342,9 @@ Zimbabwe,Harare
 🇷🇴,Romania
 🇷🇺,Russia
 🇷🇼,Rwanda
-🇰🇳,Saint Kitts and Nevis
-🇱🇨,Saint Lucia
-🇻🇨,Saint Vincent and the Grenadines
+🇰🇳,Saint Kitts and Nevis/St Kitts and Nevis
+🇱🇨,Saint Lucia/St Lucia
+🇻🇨,Saint Vincent and the Grenadines/St Vincent and the Grenadines
 🇼🇸,Samoa
 🇸🇲,San Marino
 🇸🇹,Sao Tome and Principe
@@ -381,9 +381,9 @@ Zimbabwe,Harare
 🇹🇻,Tuvalu
 🇺🇬,Uganda
 🇺🇦,Ukraine
-🇦🇪,United Arab Emirates
-🇬🇧,United Kingdom
-🇺🇸,United States
+🇦🇪,United Arab Emirates/UAE
+🇬🇧,United Kingdom/UK
+🇺🇸,United States/USA
 🇺🇾,Uruguay
 🇺🇿,Uzbekistan
 🇻🇺,Vanuatu
