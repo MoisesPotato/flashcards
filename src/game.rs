@@ -150,6 +150,15 @@ fn card(
         }
     };
 
+    let correct_answer = move || {
+        let correct_answer = data.with(move |d| d.get_item(question).answers.clone());
+        if old() && matches!(prev_question(), AnswerStatus::Wrong(_)) {
+            Some(view! {<p class="fix_answer">"The correct answer was "{correct_answer}</p>})
+        } else {
+            None
+        }
+    };
+
     view! {
         <div
             class="card"
@@ -167,6 +176,7 @@ fn card(
                     EitherOf3::C(())
                 }
             }}
+            {correct_answer}
 
             <h1>{prompt}</h1>
             {summary}
