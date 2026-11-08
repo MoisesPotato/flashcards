@@ -14,7 +14,17 @@
     transform: rotate(-34deg) translate(-86px, -420px);
     transform-origin: top;
     z-index: -1;
-    transition: transform 0.5s;
+    transition: transform 0.7s ease-in-out, background-color 0.7s ease-in-out;
+}
+
+.card.old:hover {
+    z-index: 1;
+}
+
+.summary {
+    right: 1em;
+    position: absolute;
+    bottom: 1em;
 }
 
 @keyframes appear {
@@ -52,4 +62,23 @@ body {
 
 .card input {
     margin: 10px;
+}
+
+.card.correct {
+    background: lime;
+    border: green;
+    box-shadow: 0.2em 0.2em green;
+}
+
+.card.wrong {
+    background: rgb(206, 81, 81);
+    color: #370303;
+}
+
+.card form {
+    bottom: -56px;
+    position: absolute;
+    background-color: white;
+    width: 100%;
+    left: 0;
 }

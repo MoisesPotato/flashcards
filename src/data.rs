@@ -340,8 +340,8 @@ impl Data {
 
     pub(crate) fn step_all(&mut self) {
         for i in &mut self.questions {
-            if i.attempts < self.recent {
-                i.attempts += 1;
+            if i.last_attempt < self.recent {
+                i.last_attempt += 1;
             }
         }
     }
