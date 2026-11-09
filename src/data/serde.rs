@@ -216,9 +216,12 @@ fn normal_line(
 ) -> Option<Item> {
     let beginning = chars.peek()?.0;
     let mut output = Item {
-        question: field(input, chars, errors).unwrap(),
+        question: field(chars, errors).or_else(|| {
+            skip_whitespace(chars);
+            None
+        })?,
         answers: {
-            let Some(answers) = field(input, chars, errors) else {
+            let Some(answers) = field(chars, errors) else {
                 errors.push(Error {
                     msg: "Question without answer".into(),
                     byte_index: (beginning, chars.peek().map_or(input.len(), |x| x.0)),
@@ -281,54 +284,34 @@ fn field_number(
     }
 }
 
-fn field(
-    input: &str,
-    chars: &mut Peekable<CharIndices<'_>>,
-    errors: &mut Vec<Error>,
-) -> Option<String> {
+fn field(chars: &mut Peekable<CharIndices<'_>>, errors: &mut Vec<Error>) -> Option<String> {
     let mut output = String::new();
     match *chars.peek()? {
         (_, '\n') => None,
-        (beginning, '"') => {
-            chars.next();
-            loop {
-                let Some((_, c)) = chars.next() else {
-                    errors.push(Error {
-                        msg: "Unclosed \"".into(),
-                        byte_index: (beginning, beginning + 1),
-                    });
-                    return None;
-                };
-                match c {
-                    '"' => {
-                        skip_whitespace(chars);
-                        match chars.peek() {
-                            None => {}
-                            Some((_, ',')) => {
-                                chars.next();
-                            }
-                            x => todo!("Error: found {x:?} after close quotes. Parsed {output:?}"),
-                        }
-                        return Some(output);
-                    }
-                    '\\' => todo!("Escape"),
-                    _ => {
-                        output.push(c);
-                    }
-                }
-            }
-        }
-        (beginning, _) => loop {
-            match chars.next() {
-                None => {
+        (beginning, '"') => field_in_quotes(chars, errors, output, beginning),
+        (_, _) => loop {
+            match chars.peek().copied() {
+                None | Some((_, '\n')) => {
                     return Some(output);
                 }
                 Some((_, ',')) => {
+                    chars.next();
                     skip_whitespace(chars);
                     return Some(output);
                 }
+                Some((i, '"')) => {
+                    chars.next();
+                    skip_whitespace(chars);
+                    errors.push(Error {
+                        msg: "Quotes are not allowed in questions or answers. Use '\\\"'".into(),
+                        byte_index: (i, i + 1),
+                    });
+                    skip_til_newline(chars);
+                    return None;
+                }
                 Some((_, '\\')) => todo!("Escape"),
                 Some((_, c)) => {
+                    chars.next();
                     output.push(c);
                 }
             }
@@ -336,6 +319,65 @@ fn field(
     }
 }
 
+fn field_in_quotes(
+    chars: &mut Peekable<CharIndices<'_>>,
+    errors: &mut Vec<Error>,
+    mut output: String,
+    beginning: usize,
+) -> Option<String> {
+    chars.next();
+    loop {
+        let Some((i, c)) = chars.next() else {
+            errors.push(Error {
+                msg: "Unclosed \"".into(),
+                byte_index: (beginning, beginning + 1),
+            });
+            return None;
+        };
+        match c {
+            '"' => {
+                skip_whitespace(chars);
+                match chars.peek() {
+                    None => {}
+                    Some((_, ',')) => {
+                        chars.next();
+                    }
+                    x => todo!("Error: found {x:?} after close quotes. Parsed {output:?}"),
+                }
+                return Some(output);
+            }
+            '\n' => {
+                errors.push(Error {
+                    msg: "Questions and answers must be a single line".into(),
+                    byte_index: (beginning + 1, i),
+                });
+                return None;
+            }
+            '\\' => match chars.next() {
+                Some((i, 'n')) => {
+                    errors.push(Error {
+                        msg: "Questions and answers must be a single line".into(),
+                        byte_index: (beginning + 1, i),
+                    });
+                    skip_til_newline(chars);
+                    return None;
+                }
+                c => todo!("Escaped {c:?}"),
+            },
+            _ => {
+                output.push(c);
+            }
+        }
+    }
+}
+
+fn skip_til_newline(chars: &mut Peekable<CharIndices<'_>>) {
+    for (_, c) in chars.by_ref() {
+        if c == '\n' {
+            return;
+        }
+    }
+}
 fn skip_whitespace(chars: &mut Peekable<CharIndices<'_>>) {
     loop {
         match chars.peek().copied() {
@@ -356,5 +398,41 @@ fn skip_comment(chars: &mut Peekable<CharIndices<'_>>) {
             }
             Some(_) => {}
         }
+    }
+}
+
+#[test]
+fn reject_newlines() {
+    let tests = [
+        r#"/?What is the capital of $?
+Afghanistan,"kabul
+Afghanistan",6,0,150,6
+"#,
+        r#"/?What is the capital of $?
+Afghanistan,"kabul\nAfghanistan",6,0,150,6
+"#,
+        r"/?What is the capital of $?
+Afgha
+// Nothing here
+",
+        r#"/?What is the capital of $?
+"Afgha
+// Nothing here
+"#,
+        r#"/?What is the capital of $?
+"Afgha\nistan","kabul",6,0,150,6
+"#,
+    ];
+
+    for test in tests {
+        let (data, errors) = Data::deserialize(test);
+        assert!(
+            !errors.is_empty(),
+            "Got no errors: Shouldn't accept newlines in\n{test}"
+        );
+        assert!(
+            data.questions.is_empty(),
+            "Parsing\n{test}\nShould be rejected because of the newline, got\n{data:#?}\nErrors\n{errors:#?}"
+        );
     }
 }

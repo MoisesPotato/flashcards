@@ -12,10 +12,11 @@ use Screen::{MainMenu, Playing};
 use web_sys::console;
 
 use crate::{
-    data::Data,
     game::Game,
     storage::{get_saved, save},
 };
+
+pub use data::{Data, Item};
 
 mod data;
 mod game;

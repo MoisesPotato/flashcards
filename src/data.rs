@@ -36,7 +36,7 @@ pub enum Outcome {
 }
 
 impl Item {
-    pub fn check(&self, answer: &str) -> Outcome {
+    pub(crate) fn check(&self, answer: &str) -> Outcome {
         let mut almost = false;
         for correct in self.answers.split('/') {
             let correct = correct.to_lowercase();
