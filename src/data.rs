@@ -1,18 +1,16 @@
-use std::{
-    cmp,
-    collections::BTreeMap,
-    fmt::{Display, Write},
-    fs,
-    str::FromStr,
-};
+use std::{cmp, collections::BTreeMap, fmt::Write, fs};
 
 use Outcome::{Almost, Correct, Wrong};
-use anyhow::anyhow;
 use rand::{RngExt, rng};
 
 use crate::strings::{Reuse, distance};
 
-#[derive(Debug, PartialEq, Eq)]
+#[cfg(test)]
+use pretty_assertions::assert_eq;
+
+mod serde;
+
+#[derive(Debug, PartialEq, Eq, Default)]
 pub struct Data {
     pub very_recent: usize,
     pub recent: usize,
@@ -20,7 +18,7 @@ pub struct Data {
     pub questions: Vec<Item>,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, Default)]
 pub struct Item {
     pub prompt_index: usize,
     pub question: String,
@@ -112,8 +110,7 @@ impl Item {
 impl Data {
     pub fn get_prompt(&self, i: usize) -> String {
         let item = &self.questions[i];
-        let prompt = &self.prompts[item.prompt_index];
-        item.prompt_string(prompt)
+        item.prompt_string(&self.prompts[item.prompt_index])
     }
 
     pub fn get_item(&self, i: usize) -> &Item {
@@ -124,91 +121,41 @@ impl Data {
         &mut self.questions[i]
     }
 
-    pub fn default() -> Self {
+    pub fn capitals() -> Self {
         let str = include_str!("data.quiz");
 
-        Self::deserialize(str).unwrap()
+        let (output, errors) = Self::deserialize(str);
+        debug_assert!(errors.is_empty());
+
+        output
     }
 
     pub fn serialize(&self) -> String {
         let mut output = String::new();
         writeln!(
             &mut output,
-            "// Very recent: {}, Recent: {}",
+            "/* very_recent: {}\n/* recent: {}",
             self.very_recent, self.recent
         )
         .unwrap();
         let mut last_prompt = None;
         for q in &self.questions {
             if last_prompt != Some(q.prompt_index) {
-                writeln!(output, "//?{}", self.prompts[q.prompt_index]).unwrap();
+                writeln!(output, "/?{}", self.prompts[q.prompt_index]).unwrap();
                 last_prompt = Some(q.prompt_index);
             }
+            write_or_escape(&mut output, &q.question);
+            write!(output, ",").unwrap();
+            write_or_escape(&mut output, &q.answers);
+            write!(output, ",").unwrap();
             writeln!(
                 output,
-                "{},{},{},{},{},{}",
-                q.question, q.answers, q.attempts, q.errors, q.last_attempt, q.streak
+                "{},{},{},{}",
+                q.attempts, q.errors, q.last_attempt, q.streak
             )
             .unwrap();
         }
         output
-    }
-
-    pub fn deserialize(input: &str) -> anyhow::Result<Self> {
-        let mut lines = input.lines();
-        let recent_line = lines.next().ok_or_else(|| anyhow!("File is empty"))?;
-        let strip_beginning = recent_line
-            .strip_prefix("// Very recent: ")
-            .ok_or_else(|| anyhow!("Expect first line to start with '// Very recent: '"))?;
-        let (very_recent, recent) = strip_beginning
-            .split_once(", Recent: ")
-            .ok_or_else(|| anyhow!("Expect first line to contain ', Recent: '"))?;
-        let very_recent = very_recent
-            .parse()
-            .map_err(|err| anyhow!("Failed to parse {very_recent}: {err}"))?;
-        let recent = recent
-            .parse()
-            .map_err(|err| anyhow!("Failed to parse {recent}: {err}"))?;
-        let mut prompts = vec![];
-        let mut questions = vec![];
-        for line in lines {
-            if let Some(prompt) = line.strip_prefix("//?") {
-                prompts.push(prompt.to_owned());
-            } else {
-                let mut pieces = line.split(',');
-
-                let question = pieces
-                    .next()
-                    .ok_or_else(|| anyhow!("Line ends unexpectedly:\n{line}"))?;
-                let answers = pieces
-                    .next()
-                    .ok_or_else(|| anyhow!("Line ends unexpectedly:\n{line}"))?;
-                let attempts = parse_one_or(&mut pieces, 0)?;
-                let errors = parse_one_or(&mut pieces, 0)?;
-                let last_attempt = parse_one_or(&mut pieces, recent)?;
-                let streak = parse_one_or(&mut pieces, if errors == 0 { attempts } else { 0 })?;
-
-                questions.push(Item {
-                    prompt_index: prompts
-                        .len()
-                        .checked_sub(1)
-                        .ok_or_else(|| anyhow!("Found a question without prompt"))?,
-                    question: question.into(),
-                    answers: answers.into(),
-                    attempts,
-                    errors,
-                    last_attempt,
-                    streak,
-                });
-            }
-        }
-
-        Ok(Self {
-            very_recent,
-            recent,
-            prompts,
-            questions,
-        })
     }
 
     pub fn _show_stats(&self) {
@@ -347,6 +294,22 @@ impl Data {
     }
 }
 
+fn write_or_escape(output: &mut String, item: &str) {
+    if item.chars().any(|c| matches!(c, '"' | ',')) {
+        output.push('"');
+        for c in item.chars() {
+            match c {
+                '"' => output.push_str(r#"\""#),
+                '\\' => output.push_str(r"\\"),
+                c => output.push(c),
+            }
+        }
+        output.push('"');
+    } else {
+        output.push_str(item);
+    }
+}
+
 #[derive(PartialEq, Eq, Clone, Copy)]
 struct Score {
     attempts: usize,
@@ -397,38 +360,31 @@ fn ser_deser() {
 
     let serialized = test.serialize();
 
-    let deserialized = Data::deserialize(&serialized).unwrap();
+    let (deserialized, errors) = Data::deserialize(&serialized);
+
+    assert!(
+        errors.is_empty(),
+        "Got errors parsing the following:\n{serialized}\nErrors:{errors:#?}"
+    );
 
     assert_eq!(test, deserialized);
 
-    let test_2 = "// Very recent: 75, Recent: 150
-//?What is the capital of $?
+    let test_2 = r#"/* very_recent: 75
+/* recent: 150
+/?What is the capital of $?
 Afghanistan,kabul,6,0,150,6
 Albania,tirana,2,0,150,2
-//?Name the flag $:
+Comma country,"comma,city",1,1,147,1
+/?Name the flag $:
 🇦🇫,Afghanistan,9,1,84,2
 🇦🇱,Albania,3,0,127,3
 🇫🇮,Finland,2,0,150,2
 🇿🇼,Zimbabwe,6,1,32,0
-";
+"#;
 
-    assert_eq!(test_2, Data::deserialize(test_2).unwrap().serialize());
-}
+    let (deserialized, errors) = Data::deserialize(test_2);
 
-fn parse_one_or<'s, T: FromStr>(
-    pieces: &mut impl Iterator<Item = &'s str>,
-    default: T,
-) -> anyhow::Result<T>
-where
-    T::Err: Display,
-{
-    let Some(piece) = pieces.next() else {
-        return Ok(default);
-    };
-    if piece.is_empty() {
-        return Ok(default);
-    }
-    piece
-        .parse()
-        .map_err(|err| anyhow!("Failed to parse {piece:?}: {err}"))
+    assert!(errors.is_empty(), "Got errors:\n{errors:#?}");
+
+    assert_eq!(test_2, deserialized.serialize());
 }

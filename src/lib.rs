@@ -36,7 +36,7 @@ pub fn App() -> impl IntoView {
         |err| {
             error!("Failed to get data, error:");
             console::log_1(&err);
-            Data::default()
+            Data::capitals()
         },
         |result| {
             if !result.errors.is_empty() {

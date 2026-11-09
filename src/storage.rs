@@ -15,12 +15,16 @@ pub fn get_saved() -> Result<SaveResult, JsValue> {
 
     let Some(string) = storage.get("questions")? else {
         return Ok(SaveResult {
-            data: Data::default(),
+            data: Data::capitals(),
             errors: vec!["Nothing is saved".into()],
         });
     };
 
-    let data = Data::deserialize(&string).expect("TODO");
+    let (data, errors) = Data::deserialize(&string);
+
+    if !errors.is_empty() {
+        todo!()
+    }
 
     Ok(SaveResult {
         data,
