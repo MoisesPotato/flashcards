@@ -4,13 +4,24 @@ use libfuzzer_sys::{arbitrary::*, fuzz_target};
 
 use flashcards::{Data, Item};
 
+fn no_newlines(data: &mut Unstructured) -> Result<String, Error> {
+    let output: String = data.arbitrary()?;
+
+    Ok(output
+        .chars()
+        .filter(|&x| x != '\n')
+        .collect::<String>()
+        .trim()
+        .to_string())
+}
+
 fn arbitrary_data(data: &mut Unstructured) -> Result<Data, Error> {
     let prompts_len = 1 + data.arbitrary_len::<usize>()?;
 
     let mut prompts = Vec::with_capacity(prompts_len);
 
     for _ in 0..prompts_len {
-        prompts.push(String::arbitrary(data)?);
+        prompts.push(no_newlines(data)?);
     }
 
     let questions_len = 1 + data.arbitrary_len::<usize>()?;
@@ -21,18 +32,38 @@ fn arbitrary_data(data: &mut Unstructured) -> Result<Data, Error> {
         let attempts = usize::arbitrary(data)?;
         let errors = data.int_in_range(0..=attempts)?;
         questions.push(Item {
-            answers: data.arbitrary()?,
+            answers: no_newlines(data)?,
             attempts,
             errors,
             last_attempt: data.arbitrary()?,
             prompt_index: data.int_in_range(0..=prompts_len - 1)?,
-            question: data.arbitrary()?,
+            question: no_newlines(data)?,
             streak: if errors == 0 {
                 attempts
             } else {
                 data.int_in_range(0..=attempts)?
             },
         });
+    }
+
+    for i in 0..prompts_len {
+        if questions.iter().all(|q| q.prompt_index != i) {
+            let attempts = usize::arbitrary(data)?;
+            let errors = data.int_in_range(0..=attempts)?;
+            questions.push(Item {
+                answers: no_newlines(data)?,
+                attempts,
+                errors,
+                last_attempt: data.arbitrary()?,
+                prompt_index: i,
+                question: no_newlines(data)?,
+                streak: if errors == 0 {
+                    attempts
+                } else {
+                    data.int_in_range(0..=attempts)?
+                },
+            });
+        }
     }
 
     questions.sort_unstable_by_key(|q| q.prompt_index);

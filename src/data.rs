@@ -295,12 +295,14 @@ impl Data {
 }
 
 fn write_or_escape(output: &mut String, item: &str) {
-    if item.chars().any(|c| matches!(c, '"' | ',')) {
+    if item.chars().any(|c| matches!(c, '"' | ',' | '\\' | '/')) {
         output.push('"');
         for c in item.chars() {
             match c {
-                '"' => output.push_str(r#"\""#),
-                '\\' => output.push_str(r"\\"),
+                c @ ('"' | '\\' | '/') => {
+                    output.push('\\');
+                    output.push(c);
+                }
                 c => output.push(c),
             }
         }

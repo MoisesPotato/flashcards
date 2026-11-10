@@ -1,5 +1,8 @@
 use std::{iter::Peekable, str::CharIndices};
 
+#[cfg(test)]
+use pretty_assertions::assert_eq;
+
 use crate::data::{Data, Item};
 
 #[derive(Debug)]
@@ -39,7 +42,13 @@ impl Data {
                         Some((_, '*')) => {
                             data_field(input, &mut chars, &mut output, &mut errors);
                         }
-                        Some((_, c)) => todo!("Line starts with /{c}"),
+                        Some((_, c)) => {
+                            errors.push(Error {
+                                msg: format!("A line cannot start with /{c}: Only //, /? and /* are supported"),
+                                byte_index: (slash_b, slash_b + 1 + c.len_utf8())
+                            });
+                            skip_til_newline(&mut chars);
+                        }
                     }
                 }
                 Some(_) => {
@@ -231,10 +240,6 @@ fn normal_line(
             answers
         },
         prompt_index: current_prompt,
-        // attempts: todo!(),
-        // errors: todo!(),
-        // last_attempt: todo!(),
-        // streak: todo!()
         ..Item::default()
     };
 
@@ -309,7 +314,34 @@ fn field(chars: &mut Peekable<CharIndices<'_>>, errors: &mut Vec<Error>) -> Opti
                     skip_til_newline(chars);
                     return None;
                 }
-                Some((_, '\\')) => todo!("Escape"),
+                Some((i, '\\')) => {
+                    chars.next();
+                    match chars.next() {
+                        Some((_, c @ ('"' | '\\'))) => output.push(c),
+                        Some((_, 'n')) => {
+                            errors.push(Error {
+                                msg: "New lines are not allowed in questinos of answers".into(),
+                                byte_index: (i, i + 2),
+                            });
+                            skip_til_newline(chars);
+                            return None;
+                        }
+                        None => {
+                            errors.push(Error {
+                                msg: "Unfinished escape sequence".into(),
+                                byte_index: (i, i + 1),
+                            });
+                            return None;
+                        }
+                        Some((_, c)) => {
+                            errors.push(Error {
+                                msg: format!("Unsuppored escape sequence \\{c}"),
+                                byte_index: (i, i + 1 + c.len_utf8()),
+                            });
+                            return None;
+                        }
+                    }
+                }
                 Some((_, c)) => {
                     chars.next();
                     output.push(c);
@@ -361,6 +393,9 @@ fn field_in_quotes(
                     });
                     skip_til_newline(chars);
                     return None;
+                }
+                Some((_, c @ ('\\' | '"' | '/'))) => {
+                    output.push(c);
                 }
                 c => todo!("Escaped {c:?}"),
             },
@@ -434,5 +469,55 @@ Afgha
             data.questions.is_empty(),
             "Parsing\n{test}\nShould be rejected because of the newline, got\n{data:#?}\nErrors\n{errors:#?}"
         );
+    }
+}
+
+#[test]
+fn fuzzed_serialized() {
+    let inputs = [
+        Data {
+            very_recent: 0,
+            recent: 0,
+            prompts: vec![String::new()],
+            questions: vec![
+                Item {
+                    prompt_index: 0,
+                    question: String::new(),
+                    answers: "\\\0".into(),
+                    attempts: 13_589_282_577_500,
+                    errors: 6_081_631_320_437,
+                    last_attempt: 0,
+                    streak: 0,
+                },
+                Item {
+                    prompt_index: 0,
+                    question: String::new(),
+                    answers: String::new(),
+                    attempts: 0,
+                    errors: 0,
+                    last_attempt: 0,
+                    streak: 0,
+                },
+            ],
+        },
+        Data {
+            prompts: vec![String::new()],
+            questions: vec![Item {
+                question: "/".into(),
+                answers: "/".into(),
+                ..Item::default()
+            }],
+            ..Data::default()
+        },
+    ];
+
+    for data in inputs {
+        let serialized = data.serialize();
+        let (deserialized, errors) = Data::deserialize(&serialized);
+        assert!(
+            errors.is_empty(),
+            "Deserializing yielded errors:\n{errors:#?}\nInput\n{data:#?}\nSerialized:\n{serialized:?}"
+        );
+        assert_eq!(data, deserialized);
     }
 }
