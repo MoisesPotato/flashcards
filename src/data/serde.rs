@@ -35,6 +35,23 @@ impl Data {
                     for p in &output.prompts {
                         debug_assert_eq!(p, p.trim(), "Prompts have whitespace");
                     }
+
+                    let mut i = 0;
+                    let mut empty_count = 0;
+                    while i < output.prompts.len() - empty_count {
+                        if output.questions.iter().all(|q| q.prompt_index != i) {
+                            output.prompts[i..].rotate_left(1);
+                            empty_count += 1;
+                            for q in &mut output.questions {
+                                if q.prompt_index > i {
+                                    q.prompt_index -= 1;
+                                }
+                            }
+                        } else {
+                            i += 1;
+                        }
+                    }
+
                     return (output, errors);
                 }
                 Some((slash_b, '/')) => {
