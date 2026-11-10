@@ -23,7 +23,20 @@ impl Data {
 
         loop {
             match chars.peek().copied() {
-                None => return (output, errors),
+                None => {
+                    for q in &output.questions {
+                        debug_assert_eq!(
+                            q.question,
+                            q.question.trim(),
+                            "Questions have whitespace"
+                        );
+                        debug_assert_eq!(q.answers, q.answers.trim(), "Answers have whitespace");
+                    }
+                    for p in &output.prompts {
+                        debug_assert_eq!(p, p.trim(), "Prompts have whitespace");
+                    }
+                    return (output, errors);
+                }
                 Some((slash_b, '/')) => {
                     let _slash = chars.next();
                     match chars.next() {
@@ -52,13 +65,16 @@ impl Data {
                     }
                 }
                 Some(_) => {
-                    if output.prompts.is_empty() {
-                        output.prompts.push("$".into());
-                    }
-                    if let Some(item) =
-                        normal_line(input, &mut chars, output.prompts.len() - 1, &mut errors)
-                    {
+                    if let Some(item) = normal_line(
+                        input,
+                        &mut chars,
+                        output.prompts.len().saturating_sub(1),
+                        &mut errors,
+                    ) {
                         output.questions.push(item);
+                        if output.prompts.is_empty() {
+                            output.prompts.push("$".into());
+                        }
                     }
                 }
             }
@@ -207,10 +223,10 @@ fn prompt(input: &str, chars: &mut Peekable<CharIndices<'_>>) -> String {
     let beginning = chars.peek().map_or(input.len(), |x| x.0);
     loop {
         match chars.next() {
-            None => return input[beginning..].into(),
+            None => return input[beginning..].trim().into(),
             Some((i, '\n')) => {
                 skip_whitespace(chars);
-                return input[beginning..i].into();
+                return input[beginning..i].trim().into();
             }
             Some(_) => {}
         }
@@ -297,12 +313,12 @@ fn field(chars: &mut Peekable<CharIndices<'_>>, errors: &mut Vec<Error>) -> Opti
         (_, _) => loop {
             match chars.peek().copied() {
                 None | Some((_, '\n')) => {
-                    return Some(output);
+                    return Some(trim_right(output));
                 }
                 Some((_, ',')) => {
                     chars.next();
                     skip_whitespace(chars);
-                    return Some(output);
+                    return Some(trim_right(output));
                 }
                 Some((i, '"')) => {
                     chars.next();
@@ -331,6 +347,7 @@ fn field(chars: &mut Peekable<CharIndices<'_>>, errors: &mut Vec<Error>) -> Opti
                                 msg: "Unfinished escape sequence".into(),
                                 byte_index: (i, i + 1),
                             });
+                            skip_til_newline(chars);
                             return None;
                         }
                         Some((_, c)) => {
@@ -338,6 +355,7 @@ fn field(chars: &mut Peekable<CharIndices<'_>>, errors: &mut Vec<Error>) -> Opti
                                 msg: format!("Unsuppored escape sequence \\{c}"),
                                 byte_index: (i, i + 1 + c.len_utf8()),
                             });
+                            skip_til_newline(chars);
                             return None;
                         }
                     }
@@ -351,6 +369,16 @@ fn field(chars: &mut Peekable<CharIndices<'_>>, errors: &mut Vec<Error>) -> Opti
     }
 }
 
+fn trim_right(mut output: String) -> String {
+    while let Some(c) = output.pop() {
+        if !c.is_whitespace() {
+            output.push(c);
+            break;
+        }
+    }
+    output
+}
+
 fn field_in_quotes(
     chars: &mut Peekable<CharIndices<'_>>,
     errors: &mut Vec<Error>,
@@ -358,6 +386,7 @@ fn field_in_quotes(
     beginning: usize,
 ) -> Option<String> {
     chars.next();
+    skip_whitespace(chars);
     loop {
         let Some((i, c)) = chars.next() else {
             errors.push(Error {
@@ -373,10 +402,18 @@ fn field_in_quotes(
                     None => {}
                     Some((_, ',')) => {
                         chars.next();
+                        skip_whitespace(chars);
                     }
-                    x => todo!("Error: found {x:?} after close quotes. Parsed {output:?}"),
+                    Some(&(i, c)) => {
+                        errors.push(Error {
+                            msg: "Expected ',' or new line".into(),
+                            byte_index: (i, i + c.len_utf8()),
+                        });
+                        skip_til_newline(chars);
+                        return None;
+                    }
                 }
-                return Some(output);
+                return Some(trim_right(output));
             }
             '\n' => {
                 errors.push(Error {
@@ -397,7 +434,21 @@ fn field_in_quotes(
                 Some((_, c @ ('\\' | '"' | '/'))) => {
                     output.push(c);
                 }
-                c => todo!("Escaped {c:?}"),
+                Some((_, c)) => {
+                    errors.push(Error {
+                        msg: format!("Unsuppored escape sequence \\{c}"),
+                        byte_index: (i, i + 1 + c.len_utf8()),
+                    });
+                    skip_til_newline(chars);
+                    return None;
+                }
+                None => {
+                    errors.push(Error {
+                        msg: "Expected a character after '\\'".into(),
+                        byte_index: (i, i + 1),
+                    });
+                    return None;
+                }
             },
             _ => {
                 output.push(c);
@@ -518,6 +569,39 @@ fn fuzzed_serialized() {
             errors.is_empty(),
             "Deserializing yielded errors:\n{errors:#?}\nInput\n{data:#?}\nSerialized:\n{serialized:?}"
         );
+        assert_eq!(data, deserialized);
+    }
+}
+
+#[test]
+fn fuzzed_deserialize() {
+    const INPUTS: &[&str] = &[
+        "\n/?1\n/?2\nq,a",
+        ",\" \"",
+        ",\"\u{b}\"",
+        "q ,a",
+        "~\u{b},/",
+        "/? ",
+        "/?\u{b}",
+        "\"\", ",
+        "\"\",\u{b}",
+        "\"\\#",
+        "\"\\",
+        "\"\"j",
+        "/?",
+        "\u{19}",
+    ];
+
+    for input in INPUTS {
+        let (data, errors) = Data::deserialize(input);
+
+        let serialized = data.serialize();
+
+        eprintln!("Before:\n{input:?}\nErrors:{errors:#?}\nAfter:\n{serialized:?}");
+
+        let (deserialized, errors) = Data::deserialize(&serialized);
+
+        assert!(errors.is_empty());
         assert_eq!(data, deserialized);
     }
 }

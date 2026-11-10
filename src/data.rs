@@ -155,6 +155,11 @@ impl Data {
             )
             .unwrap();
         }
+        for (i, p) in self.prompts.iter().enumerate() {
+            if self.questions.iter().all(|q| q.prompt_index != i) {
+                writeln!(output, "/?{p}").unwrap();
+            }
+        }
         output
     }
 
