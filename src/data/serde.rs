@@ -64,6 +64,9 @@ impl Data {
                         Some((_, '/')) => {
                             skip_comment(&mut chars);
                         }
+                        Some((_, '\n')) => {
+                            skip_whitespace(&mut chars);
+                        }
                         Some((_, '?')) => {
                             let prompt = prompt(input, &mut chars);
                             // println!("Prompt: {prompt:?}");
@@ -96,61 +99,6 @@ impl Data {
                 }
             }
         }
-
-        // let mut lines = input.lines();
-        // let recent_line = lines.next().ok_or_else(|| anyhow!("File is empty"))?;
-        // let strip_beginning = recent_line
-        //     .strip_prefix("// Very recent: ")
-        //     .ok_or_else(|| anyhow!("Expect first line to start with '// Very recent: '"))?;
-        // let (very_recent, recent) = strip_beginning
-        //     .split_once(", Recent: ")
-        //     .ok_or_else(|| anyhow!("Expect first line to contain ', Recent: '"))?;
-        // let very_recent = very_recent
-        //     .parse()
-        //     .map_err(|err| anyhow!("Failed to parse {very_recent}: {err}"))?;
-        // let recent = recent
-        //     .parse()
-        //     .map_err(|err| anyhow!("Failed to parse {recent}: {err}"))?;
-        // let mut prompts = vec![];
-        // let mut questions = vec![];
-        // for line in lines {
-        //     if let Some(prompt) = line.strip_prefix("//?") {
-        //         prompts.push(prompt.to_owned());
-        //     } else {
-        //         let mut pieces = line.split(',');
-
-        //         let question = pieces
-        //             .next()
-        //             .ok_or_else(|| anyhow!("Line ends unexpectedly:\n{line}"))?;
-        //         let answers = pieces
-        //             .next()
-        //             .ok_or_else(|| anyhow!("Line ends unexpectedly:\n{line}"))?;
-        //         let attempts = parse_one_or(&mut pieces, 0)?;
-        //         let errors = parse_one_or(&mut pieces, 0)?;
-        //         let last_attempt = parse_one_or(&mut pieces, recent)?;
-        //         let streak = parse_one_or(&mut pieces, if errors == 0 { attempts } else { 0 })?;
-
-        //         questions.push(Item {
-        //             prompt_index: prompts
-        //                 .len()
-        //                 .checked_sub(1)
-        //                 .ok_or_else(|| anyhow!("Found a question without prompt"))?,
-        //             question: question.into(),
-        //             answers: answers.into(),
-        //             attempts,
-        //             errors,
-        //             last_attempt,
-        //             streak,
-        //         });
-        //     }
-        // }
-
-        // Ok(Self {
-        //     very_recent,
-        //     recent,
-        //     prompts,
-        //     questions,
-        // })
     }
 }
 
@@ -174,6 +122,7 @@ fn data_field(
                 msg: "Line starting with /* has no semicolon".into(),
                 byte_index: (ident_begin, input.len()),
             });
+            skip_til_newline(chars);
             return;
         };
         if c == '\n' {
@@ -181,6 +130,7 @@ fn data_field(
                 msg: "Line starting with /* has no semicolon".into(),
                 byte_index: (ident_begin, input.len()),
             });
+            skip_whitespace(chars);
             return;
         }
         if c == ':' {
@@ -202,6 +152,7 @@ fn data_field(
                 msg: "Line starting with /* has two semicolons".into(),
                 byte_index: (i, i + 1),
             });
+            skip_til_newline(chars);
             return;
         }
     };
@@ -437,6 +388,7 @@ fn field_in_quotes(
                     msg: "Questions and answers must be a single line".into(),
                     byte_index: (beginning + 1, i),
                 });
+                skip_whitespace(chars);
                 return None;
             }
             '\\' => match chars.next() {
@@ -477,6 +429,7 @@ fn field_in_quotes(
 fn skip_til_newline(chars: &mut Peekable<CharIndices<'_>>) {
     for (_, c) in chars.by_ref() {
         if c == '\n' {
+            skip_whitespace(chars);
             return;
         }
     }
@@ -593,6 +546,9 @@ fn fuzzed_serialized() {
 #[test]
 fn fuzzed_deserialize() {
     const INPUTS: &[&str] = &[
+        ",\"/\n /,\"\"",
+        "/*\u{3}\n /,=",
+        "/u{3}\n \u{16},/",
         "\n/?1\n/?2\nq,a",
         ",\" \"",
         ",\"\u{b}\"",
