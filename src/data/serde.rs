@@ -405,7 +405,7 @@ fn field_in_quotes(
                 }
                 Some((_, c)) => {
                     errors.push(Error {
-                        msg: format!("Unsuppored escape sequence \\{c}"),
+                        msg: format!("Unsupported escape sequence \\{c}"),
                         byte_index: (i, i + 1 + c.len_utf8()),
                     });
                     skip_til_newline(chars);

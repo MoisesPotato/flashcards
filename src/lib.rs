@@ -6,12 +6,13 @@
     clippy::suboptimal_flops
 )]
 
-use leptos::{either::Either, logging::error, prelude::*};
+use leptos::{either::EitherOf3, logging::error, prelude::*};
 
-use Screen::{MainMenu, Playing};
+use Screen::{Editing, MainMenu, Playing};
 use web_sys::console;
 
 use crate::{
+    editor::Editor,
     game::Game,
     storage::{get_saved, save},
 };
@@ -19,6 +20,7 @@ use crate::{
 pub use data::{Data, Item};
 
 mod data;
+mod editor;
 mod game;
 mod storage;
 mod strings;
@@ -27,6 +29,7 @@ mod strings;
 enum Screen {
     MainMenu,
     Playing,
+    Editing,
 }
 
 #[component]
@@ -61,9 +64,14 @@ pub fn App() -> impl IntoView {
     });
 
     move || match screen() {
-        MainMenu => {
-            Either::Left(view! { <button on:click=move |_| set_screen(Playing)>"Play"</button> })
-        }
-        Playing => Either::Right(view! { <Game data /> }),
+        MainMenu => EitherOf3::A(view! {
+            <div id="menu">
+                <h1>"Welcome"</h1>
+                <button on:click=move |_| set_screen(Playing)>"Play"</button>
+                <button on:click=move |_| set_screen(Editing)>"Edit Questions"</button>
+            </div>
+        }),
+        Playing => EitherOf3::B(view! { <Game data /> }),
+        Editing => EitherOf3::C(view! { <Editor data /> }),
     }
 }
