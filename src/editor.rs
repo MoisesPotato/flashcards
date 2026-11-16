@@ -18,7 +18,35 @@ pub fn editor(data: RwSignal<Data>) -> impl IntoView {
         div.set_scroll_left(area.scroll_left());
     };
 
+    let errors = RwSignal::new(vec![]);
+
+    let on_input = move |_ev| {
+        data.set(text.with(|t| {
+            let (data, new_errors) = Data::deserialize(t);
+            errors.set(new_errors);
+            data
+        }));
+    };
+
     view! {
-    <div id="highlighted" node_ref=node_div>{text}</div>
-    <textarea bind:value=text id="q-input" node_ref=node_area on:scroll=on_scroll></textarea> }
+        <div id="highlighted" node_ref=node_div>
+            {text}
+        </div>
+        <textarea
+            bind:value=text
+            id="q-input"
+            node_ref=node_area
+            on:scroll=on_scroll
+            on:input=on_input
+        ></textarea>
+        {move || {
+            errors
+                .get()
+                .iter()
+                .map(move |error| {
+                    view! { <p class="error-msg">{error.msg.clone()}</p> }
+                })
+                .collect::<Vec<_>>()
+        }}
+    }
 }

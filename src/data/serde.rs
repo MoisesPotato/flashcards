@@ -5,7 +5,7 @@ use pretty_assertions::assert_eq;
 
 use crate::data::{Data, Item};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Error {
     pub msg: String,
     pub byte_index: (usize, usize),
@@ -57,14 +57,10 @@ impl Data {
                 Some((slash_b, '/')) => {
                     let _slash = chars.next();
                     match chars.next() {
-                        None => errors.push(Error {
-                            msg: "Line ended unexpectedly".into(),
-                            byte_index: (slash_b, slash_b + '/'.len_utf8()),
-                        }),
                         Some((_, '/')) => {
                             skip_comment(&mut chars);
                         }
-                        Some((_, '\n')) => {
+                        None | Some((_, '\n')) => {
                             skip_whitespace(&mut chars);
                         }
                         Some((_, '?')) => {
@@ -83,6 +79,10 @@ impl Data {
                             skip_til_newline(&mut chars);
                         }
                     }
+                }
+                Some((_, '\n')) => {
+                    chars.next();
+                    skip_whitespace(&mut chars);
                 }
                 Some(_) => {
                     if let Some(item) = normal_line(
@@ -209,10 +209,7 @@ fn normal_line(
 ) -> Option<Item> {
     let beginning = chars.peek()?.0;
     let mut output = Item {
-        question: field(chars, errors).or_else(|| {
-            skip_whitespace(chars);
-            None
-        })?,
+        question: field(chars, errors)?,
         answers: {
             let Some(answers) = field(chars, errors) else {
                 errors.push(Error {
@@ -236,7 +233,7 @@ fn normal_line(
         0
     });
 
-    skip_whitespace(chars);
+    skip_til_newline(chars);
 
     // println!("{output:#?}");
 
@@ -253,12 +250,17 @@ fn field_number(
     }
     let beginning = chars.peek()?.0;
     let output = loop {
-        let Some((i, c)) = chars.next() else {
+        let Some(&(i, c)) = chars.peek() else {
             break &input[beginning..];
         };
-        if c == ',' || c == '\n' {
+        if c == ',' {
+            chars.next();
             break &input[beginning..i];
         }
+        if c == '\n' {
+            break &input[beginning..i];
+        }
+        chars.next();
     };
 
     match output.parse() {
@@ -276,7 +278,11 @@ fn field_number(
 fn field(chars: &mut Peekable<CharIndices<'_>>, errors: &mut Vec<Error>) -> Option<String> {
     let mut output = String::new();
     match *chars.peek()? {
-        (_, '\n') => None,
+        (_, '\n') => {
+            chars.next();
+            skip_whitespace(chars);
+            None
+        }
         (beginning, '"') => field_in_quotes(chars, errors, output, beginning),
         (_, _) => loop {
             match chars.peek().copied() {
@@ -437,6 +443,7 @@ fn skip_til_newline(chars: &mut Peekable<CharIndices<'_>>) {
 fn skip_whitespace(chars: &mut Peekable<CharIndices<'_>>) {
     loop {
         match chars.peek().copied() {
+            Some((_, '\n')) => return,
             Some((_, c)) if c.is_whitespace() => {
                 chars.next();
             }
@@ -546,6 +553,8 @@ fn fuzzed_serialized() {
 #[test]
 fn fuzzed_deserialize() {
     const INPUTS: &[&str] = &[
+        "q\n 0,,",
+        "\n q,a",
         ",\"/\n /,\"\"",
         "/*\u{3}\n /,=",
         "/u{3}\n \u{16},/",
@@ -577,4 +586,43 @@ fn fuzzed_deserialize() {
         assert!(errors.is_empty());
         assert_eq!(data, deserialized);
     }
+}
+
+#[test]
+fn early_line_end() {
+    const INPUT: &str = "q1,a
+q2,a,
+q3,a,0
+q4,a,0,
+q5,a,0,0
+q6,a,0,0,0
+q7,a,0,0,0,0
+q8,a,0,0,0,0,
+";
+
+    let (data, errors) = Data::deserialize(INPUT);
+
+    assert!(
+        errors.is_empty(),
+        "Got errors\n{errors:#?},\nStuff:\n{data:#?}"
+    );
+
+    assert_eq!(
+        data,
+        Data {
+            very_recent: 0,
+            recent: 0,
+            prompts: vec!["$".into()],
+            questions: vec![
+                Item::new("q1", "a"),
+                Item::new("q2", "a"),
+                Item::new("q3", "a"),
+                Item::new("q4", "a"),
+                Item::new("q5", "a"),
+                Item::new("q6", "a"),
+                Item::new("q7", "a"),
+                Item::new("q8", "a"),
+            ]
+        }
+    );
 }

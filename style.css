@@ -215,3 +215,9 @@ body {
 /* .error {
     text-decoration: underline wavy red;
 } */
+
+.error-msg {
+    position: relative;
+    color: red;
+    z-index: 2;
+}

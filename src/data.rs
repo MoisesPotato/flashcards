@@ -36,6 +36,14 @@ pub enum Outcome {
 }
 
 impl Item {
+    #[cfg(test)]
+    pub(crate) fn new(q: impl Into<String>, a: impl Into<String>) -> Self {
+        Self {
+            question: q.into(),
+            answers: a.into(),
+            ..Default::default()
+        }
+    }
     pub(crate) fn check(&self, answer: &str) -> Outcome {
         let mut almost = false;
         for correct in self.answers.split('/') {
@@ -374,7 +382,10 @@ fn ser_deser() {
         "Got errors parsing the following:\n{serialized}\nErrors:{errors:#?}"
     );
 
-    assert_eq!(test, deserialized);
+    assert_eq!(
+        test, deserialized,
+        "Incorrectly parsed the following:\n{serialized}"
+    );
 
     let test_2 = r#"/* very_recent: 75
 /* recent: 150
