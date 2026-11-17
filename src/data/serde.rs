@@ -5,133 +5,148 @@ use pretty_assertions::assert_eq;
 
 use crate::data::{Data, Item};
 
+use LineOutput::{Comment, Prompt};
+
 #[derive(Debug, Clone)]
 pub struct Error {
     pub msg: String,
+    pub line: usize,
     pub byte_index: (usize, usize),
+}
+
+impl Error {
+    fn from_msg(msg: impl Into<String>, byte_index: (usize, usize)) -> Self {
+        Self {
+            msg: msg.into(),
+            line: 0,
+            byte_index,
+        }
+    }
+}
+
+#[derive(Debug)]
+enum Parameter {
+    Recent(usize),
+    VeryRecent(usize),
+}
+
+#[derive(Debug)]
+enum LineOutput {
+    Comment,
+    Prompt(String),
+    Parameter(Parameter),
+    Item(Item),
+}
+
+impl LineOutput {
+    fn deserialize(input: &str) -> Result<Self, Error> {
+        let mut chars = input.char_indices().peekable();
+
+        skip_whitespace(&mut chars);
+
+        match chars.peek().copied() {
+            None => Ok(Self::Comment),
+            Some((slash_b, '/')) => {
+                let _slash = chars.next();
+                match chars.next() {
+                    None | Some((_, '/')) => Ok(Self::Comment),
+                    Some((_, '?')) => {
+                        let prompt = prompt(input, &mut chars);
+                        // println!("Prompt: {prompt:?}");
+                        Ok(Self::Prompt(prompt))
+                    }
+                    Some((_, '*')) => data_field(input, &mut chars),
+                    Some((_, c)) => Err(Error::from_msg(
+                        format!("A line cannot start with /{c}: Only //, /? and /* are supported"),
+                        (slash_b, slash_b + 1 + c.len_utf8()),
+                    )),
+                }
+            }
+            Some(_) => normal_line(input, &mut chars),
+        }
+    }
 }
 
 impl Data {
     pub fn deserialize(input: &str) -> (Self, Vec<Error>) {
         let mut output = Self::default();
-
         let mut errors = vec![];
 
-        let mut chars = input.char_indices().peekable();
-
-        skip_whitespace(&mut chars);
-
-        loop {
-            match chars.peek().copied() {
-                None => {
-                    for q in &output.questions {
-                        debug_assert_eq!(
-                            q.question,
-                            q.question.trim(),
-                            "Questions have whitespace"
-                        );
-                        debug_assert_eq!(q.answers, q.answers.trim(), "Answers have whitespace");
-                    }
-                    for p in &output.prompts {
-                        debug_assert_eq!(p, p.trim(), "Prompts have whitespace");
-                    }
-
-                    let mut i = 0;
-                    let mut empty_count = 0;
-                    while i < output.prompts.len() - empty_count {
-                        if output.questions.iter().all(|q| q.prompt_index != i) {
-                            output.prompts[i..].rotate_left(1);
-                            empty_count += 1;
-                            for q in &mut output.questions {
-                                if q.prompt_index > i {
-                                    q.prompt_index -= 1;
-                                }
-                            }
-                        } else {
-                            i += 1;
-                        }
-                    }
-
-                    return (output, errors);
+        for (i, line) in input.lines().enumerate() {
+            match LineOutput::deserialize(line) {
+                Err(mut err) => {
+                    err.line = i;
+                    errors.push(err);
                 }
-                Some((slash_b, '/')) => {
-                    let _slash = chars.next();
-                    match chars.next() {
-                        Some((_, '/')) => {
-                            skip_comment(&mut chars);
-                        }
-                        None | Some((_, '\n')) => {
-                            skip_whitespace(&mut chars);
-                        }
-                        Some((_, '?')) => {
-                            let prompt = prompt(input, &mut chars);
-                            // println!("Prompt: {prompt:?}");
-                            output.prompts.push(prompt);
-                        }
-                        Some((_, '*')) => {
-                            data_field(input, &mut chars, &mut output, &mut errors);
-                        }
-                        Some((_, c)) => {
-                            errors.push(Error {
-                                msg: format!("A line cannot start with /{c}: Only //, /? and /* are supported"),
-                                byte_index: (slash_b, slash_b + 1 + c.len_utf8())
-                            });
-                            skip_til_newline(&mut chars);
-                        }
+                Ok(LineOutput::Parameter(Parameter::VeryRecent(x))) => {
+                    output.very_recent = x;
+                }
+                Ok(LineOutput::Parameter(Parameter::Recent(x))) => {
+                    output.recent = x;
+                }
+                Ok(Prompt(p)) => {
+                    output.prompts.push(p);
+                }
+                Ok(LineOutput::Item(mut i)) => {
+                    if output.prompts.is_empty() {
+                        output.prompts.push("$".into());
                     }
+                    i.prompt_index = output.prompts.len() - 1;
+                    output.questions.push(i);
                 }
-                Some((_, '\n')) => {
-                    chars.next();
-                    skip_whitespace(&mut chars);
-                }
-                Some(_) => {
-                    if let Some(item) = normal_line(
-                        input,
-                        &mut chars,
-                        output.prompts.len().saturating_sub(1),
-                        &mut errors,
-                    ) {
-                        output.questions.push(item);
-                        if output.prompts.is_empty() {
-                            output.prompts.push("$".into());
-                        }
-                    }
-                }
+                Ok(Comment) => {}
             }
         }
+
+        for q in &output.questions {
+            debug_assert_eq!(q.question, q.question.trim(), "Questions have whitespace");
+            debug_assert_eq!(q.answers, q.answers.trim(), "Answers have whitespace");
+        }
+        for p in &output.prompts {
+            debug_assert_eq!(p, p.trim(), "Prompts have whitespace");
+        }
+
+        let mut i = 0;
+        let mut empty_count = 0;
+        while i < output.prompts.len() - empty_count {
+            if output.questions.iter().all(|q| q.prompt_index != i) {
+                output.prompts[i..].rotate_left(1);
+                empty_count += 1;
+                for q in &mut output.questions {
+                    if q.prompt_index > i {
+                        q.prompt_index -= 1;
+                    }
+                }
+            } else {
+                i += 1;
+            }
+        }
+
+        // return (output, errors);
+        (output, errors)
     }
 }
 
-fn data_field(
-    input: &str,
-    chars: &mut Peekable<CharIndices<'_>>,
-    output: &mut Data,
-    errors: &mut Vec<Error>,
-) {
+fn data_field(input: &str, chars: &mut Peekable<CharIndices<'_>>) -> Result<LineOutput, Error> {
     skip_whitespace(chars);
     let Some(ident_begin) = chars.peek().map(|c| c.0) else {
-        errors.push(Error {
-            msg: "Line starting with /* has nothing after it".into(),
-            byte_index: (input.len(), input.len()),
-        });
-        return;
+        return Err(Error::from_msg(
+            "Line starting with /* has nothing after it",
+            (input.len(), input.len()),
+        ));
     };
     let ident = loop {
         let Some((i, c)) = chars.next() else {
-            errors.push(Error {
-                msg: "Line starting with /* has no semicolon".into(),
-                byte_index: (ident_begin, input.len()),
-            });
-            skip_til_newline(chars);
-            return;
+            return Err(Error::from_msg(
+                "Line starting with /* has no semicolon",
+                (ident_begin, input.len()),
+            ));
         };
         if c == '\n' {
-            errors.push(Error {
-                msg: "Line starting with /* has no semicolon".into(),
-                byte_index: (ident_begin, input.len()),
-            });
-            skip_whitespace(chars);
-            return;
+            return Err(Error::from_msg(
+                "Line starting with /* has no semicolon",
+                (ident_begin, input.len()),
+            ));
         }
         if c == ':' {
             break &input[ident_begin..i];
@@ -148,42 +163,32 @@ fn data_field(
             break &input[value_begin..i];
         }
         if c == ':' {
-            errors.push(Error {
-                msg: "Line starting with /* has two semicolons".into(),
-                byte_index: (i, i + 1),
-            });
-            skip_til_newline(chars);
-            return;
+            return Err(Error::from_msg(
+                "Line starting with /* has two semicolons",
+                (i, i + 1),
+            ));
         }
     };
     skip_whitespace(chars);
     match ident {
         "very_recent" => match value.parse() {
-            Ok(v) => output.very_recent = v,
-            Err(err) => {
-                errors.push(Error {
-                    msg: format!("Couldn't parse {value:?}: {err}"),
-                    byte_index: (value_begin, value_begin + value.len()),
-                });
-            }
+            Ok(v) => Ok(LineOutput::Parameter(Parameter::VeryRecent(v))),
+            Err(err) => Err(Error::from_msg(
+                format!("Couldn't parse {value:?}: {err}"),
+                (value_begin, value_begin + value.len()),
+            )),
         },
         "recent" => match value.parse() {
-            Ok(v) => output.recent = v,
-            Err(err) => {
-                errors.push(Error {
-                    msg: format!("Couldn't parse {value:?}: {err}"),
-                    byte_index: (value_begin, value_begin + value.len()),
-                });
-            }
+            Ok(v) => Ok(LineOutput::Parameter(Parameter::Recent(v))),
+            Err(err) => Err(Error::from_msg(
+                format!("Couldn't parse {value:?}: {err}"),
+                (value_begin, value_begin + value.len()),
+            )),
         },
-        _ => {
-            errors.push(Error {
-                msg: format!(
-                    "Unkonwn identifier {ident:?}: Possible values are 'very_recent' and 'recent'"
-                ),
-                byte_index: (ident_begin, ident_begin + ident.len()),
-            });
-        }
+        _ => Err(Error::from_msg(
+            format!("Unkonwn identifier {ident:?}: Possible values are 'very_recent' and 'recent'"),
+            (ident_begin, ident_begin + ident.len()),
+        )),
     }
 }
 
@@ -201,54 +206,42 @@ fn prompt(input: &str, chars: &mut Peekable<CharIndices<'_>>) -> String {
     }
 }
 
-fn normal_line(
-    input: &str,
-    chars: &mut Peekable<CharIndices<'_>>,
-    current_prompt: usize,
-    errors: &mut Vec<Error>,
-) -> Option<Item> {
-    let beginning = chars.peek()?.0;
+fn normal_line(input: &str, chars: &mut Peekable<CharIndices<'_>>) -> Result<LineOutput, Error> {
+    let beginning = chars.peek().expect("Can it be empty here?").0;
     let mut output = Item {
-        question: field(chars, errors)?,
+        question: field(chars)?.expect("Can it be empty here?"),
         answers: {
-            let Some(answers) = field(chars, errors) else {
-                errors.push(Error {
-                    msg: "Question without answer".into(),
-                    byte_index: (beginning, chars.peek().map_or(input.len(), |x| x.0)),
-                });
-                return None;
-            };
-            answers
+            field(chars)?.ok_or_else(|| {
+                Error::from_msg(
+                    "Question without answer",
+                    (beginning, chars.peek().map_or(input.len(), |x| x.0)),
+                )
+            })?
         },
-        prompt_index: current_prompt,
         ..Item::default()
     };
 
-    output.attempts = field_number(input, chars, errors).unwrap_or_default();
-    output.errors = field_number(input, chars, errors).unwrap_or_default();
-    output.last_attempt = field_number(input, chars, errors).unwrap_or_default();
-    output.streak = field_number(input, chars, errors).unwrap_or(if output.errors == 0 {
+    output.attempts = field_number(input, chars)?.unwrap_or_default();
+    output.errors = field_number(input, chars)?.unwrap_or_default();
+    output.last_attempt = field_number(input, chars)?.unwrap_or_default();
+    output.streak = field_number(input, chars)?.unwrap_or(if output.errors == 0 {
         output.attempts
     } else {
         0
     });
 
-    skip_til_newline(chars);
-
     // println!("{output:#?}");
 
-    Some(output)
+    Ok(LineOutput::Item(output))
 }
 
 fn field_number(
     input: &str,
     chars: &mut Peekable<CharIndices<'_>>,
-    errors: &mut Vec<Error>,
-) -> Option<usize> {
-    if chars.peek()?.1 == '\n' {
-        return None;
-    }
-    let beginning = chars.peek()?.0;
+) -> Result<Option<usize>, Error> {
+    let Some(&(beginning, _)) = chars.peek() else {
+        return Ok(None);
+    };
     let output = loop {
         let Some(&(i, c)) = chars.peek() else {
             break &input[beginning..];
@@ -264,73 +257,55 @@ fn field_number(
     };
 
     match output.parse() {
-        Err(err) => {
-            errors.push(Error {
-                msg: format!("Failed to parse number {output:?}: {err}"),
-                byte_index: (beginning, beginning + output.len()),
-            });
-            None
-        }
-        Ok(x) => Some(x),
+        Err(err) => Err(Error::from_msg(
+            format!("Failed to parse number {output:?}: {err}"),
+            (beginning, beginning + output.len()),
+        )),
+        Ok(x) => Ok(Some(x)),
     }
 }
 
-fn field(chars: &mut Peekable<CharIndices<'_>>, errors: &mut Vec<Error>) -> Option<String> {
+fn field(chars: &mut Peekable<CharIndices<'_>>) -> Result<Option<String>, Error> {
     let mut output = String::new();
-    match *chars.peek()? {
-        (_, '\n') => {
-            chars.next();
-            skip_whitespace(chars);
-            None
-        }
-        (beginning, '"') => field_in_quotes(chars, errors, output, beginning),
-        (_, _) => loop {
+    match chars.peek().copied() {
+        None => Ok(None),
+        Some((beginning, '"')) => field_in_quotes(chars, beginning),
+        Some((_, _)) => loop {
             match chars.peek().copied() {
                 None | Some((_, '\n')) => {
-                    return Some(trim_right(output));
+                    return Ok(Some(trim_right(output)));
                 }
                 Some((_, ',')) => {
                     chars.next();
                     skip_whitespace(chars);
-                    return Some(trim_right(output));
+                    return Ok(Some(trim_right(output)));
                 }
                 Some((i, '"')) => {
                     chars.next();
                     skip_whitespace(chars);
-                    errors.push(Error {
-                        msg: "Quotes are not allowed in questions or answers. Use '\\\"'".into(),
-                        byte_index: (i, i + 1),
-                    });
-                    skip_til_newline(chars);
-                    return None;
+                    return Err(Error::from_msg(
+                        "Quotes are not allowed in questions or answers. Use '\\\"'",
+                        (i, i + 1),
+                    ));
                 }
                 Some((i, '\\')) => {
                     chars.next();
                     match chars.next() {
                         Some((_, c @ ('"' | '\\'))) => output.push(c),
                         Some((_, 'n')) => {
-                            errors.push(Error {
-                                msg: "New lines are not allowed in questinos of answers".into(),
-                                byte_index: (i, i + 2),
-                            });
-                            skip_til_newline(chars);
-                            return None;
+                            return Err(Error::from_msg(
+                                "New lines are not allowed in questinos of answers",
+                                (i, i + 2),
+                            ));
                         }
                         None => {
-                            errors.push(Error {
-                                msg: "Unfinished escape sequence".into(),
-                                byte_index: (i, i + 1),
-                            });
-                            skip_til_newline(chars);
-                            return None;
+                            return Err(Error::from_msg("Unfinished escape sequence", (i, i + 1)));
                         }
                         Some((_, c)) => {
-                            errors.push(Error {
-                                msg: format!("Unsuppored escape sequence \\{c}"),
-                                byte_index: (i, i + 1 + c.len_utf8()),
-                            });
-                            skip_til_newline(chars);
-                            return None;
+                            return Err(Error::from_msg(
+                                format!("Unsuppored escape sequence \\{c}"),
+                                (i, i + 1 + c.len_utf8()),
+                            ));
                         }
                     }
                 }
@@ -355,19 +330,14 @@ fn trim_right(mut output: String) -> String {
 
 fn field_in_quotes(
     chars: &mut Peekable<CharIndices<'_>>,
-    errors: &mut Vec<Error>,
-    mut output: String,
     beginning: usize,
-) -> Option<String> {
+) -> Result<Option<String>, Error> {
+    let mut output = String::new();
     chars.next();
     skip_whitespace(chars);
     loop {
         let Some((i, c)) = chars.next() else {
-            errors.push(Error {
-                msg: "Unclosed \"".into(),
-                byte_index: (beginning, beginning + 1),
-            });
-            return None;
+            return Err(Error::from_msg("Unclosed \"", (beginning, beginning + 1)));
         };
         match c {
             '"' => {
@@ -379,50 +349,41 @@ fn field_in_quotes(
                         skip_whitespace(chars);
                     }
                     Some(&(i, c)) => {
-                        errors.push(Error {
-                            msg: "Expected ',' or new line".into(),
-                            byte_index: (i, i + c.len_utf8()),
-                        });
-                        skip_til_newline(chars);
-                        return None;
+                        return Err(Error::from_msg(
+                            "Expected ',' or new line",
+                            (i, i + c.len_utf8()),
+                        ));
                     }
                 }
-                return Some(trim_right(output));
+                return Ok(Some(trim_right(output)));
             }
             '\n' => {
-                errors.push(Error {
-                    msg: "Questions and answers must be a single line".into(),
-                    byte_index: (beginning + 1, i),
-                });
-                skip_whitespace(chars);
-                return None;
+                return Err(Error::from_msg(
+                    "Questions and answers must be a single line",
+                    (beginning + 1, i),
+                ));
             }
             '\\' => match chars.next() {
                 Some((i, 'n')) => {
-                    errors.push(Error {
-                        msg: "Questions and answers must be a single line".into(),
-                        byte_index: (beginning + 1, i),
-                    });
-                    skip_til_newline(chars);
-                    return None;
+                    return Err(Error::from_msg(
+                        "Questions and answers must be a single line",
+                        (beginning + 1, i),
+                    ));
                 }
                 Some((_, c @ ('\\' | '"' | '/'))) => {
                     output.push(c);
                 }
                 Some((_, c)) => {
-                    errors.push(Error {
-                        msg: format!("Unsupported escape sequence \\{c}"),
-                        byte_index: (i, i + 1 + c.len_utf8()),
-                    });
-                    skip_til_newline(chars);
-                    return None;
+                    return Err(Error::from_msg(
+                        format!("Unsupported escape sequence \\{c})"),
+                        (i, i + 1 + c.len_utf8()),
+                    ));
                 }
                 None => {
-                    errors.push(Error {
-                        msg: "Expected a character after '\\'".into(),
-                        byte_index: (i, i + 1),
-                    });
-                    return None;
+                    return Err(Error::from_msg(
+                        "Expected a character after '\\'",
+                        (i, i + 1),
+                    ));
                 }
             },
             _ => {
@@ -432,14 +393,6 @@ fn field_in_quotes(
     }
 }
 
-fn skip_til_newline(chars: &mut Peekable<CharIndices<'_>>) {
-    for (_, c) in chars.by_ref() {
-        if c == '\n' {
-            skip_whitespace(chars);
-            return;
-        }
-    }
-}
 fn skip_whitespace(chars: &mut Peekable<CharIndices<'_>>) {
     loop {
         match chars.peek().copied() {
@@ -448,18 +401,6 @@ fn skip_whitespace(chars: &mut Peekable<CharIndices<'_>>) {
                 chars.next();
             }
             Some(_) | None => return,
-        }
-    }
-}
-fn skip_comment(chars: &mut Peekable<CharIndices<'_>>) {
-    loop {
-        match chars.next() {
-            None => return,
-            Some((_, '\n')) => {
-                skip_whitespace(chars);
-                return;
-            }
-            Some(_) => {}
         }
     }
 }
