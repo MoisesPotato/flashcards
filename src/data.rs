@@ -8,7 +8,7 @@ use crate::strings::{Reuse, distance};
 #[cfg(test)]
 use pretty_assertions::assert_eq;
 
-mod serde;
+pub mod serde;
 
 #[derive(Debug, PartialEq, Eq, Default)]
 pub struct Data {

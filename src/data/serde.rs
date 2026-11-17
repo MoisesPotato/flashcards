@@ -25,13 +25,13 @@ impl Error {
 }
 
 #[derive(Debug)]
-enum Parameter {
+pub enum Parameter {
     Recent(usize),
     VeryRecent(usize),
 }
 
 #[derive(Debug)]
-enum LineOutput {
+pub enum LineOutput {
     Comment,
     Prompt(String),
     Parameter(Parameter),
@@ -39,7 +39,7 @@ enum LineOutput {
 }
 
 impl LineOutput {
-    fn deserialize(input: &str) -> Result<Self, Error> {
+    pub(crate) fn deserialize(input: &str) -> Result<Self, Error> {
         let mut chars = input.char_indices().peekable();
 
         skip_whitespace(&mut chars);

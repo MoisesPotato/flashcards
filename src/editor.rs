@@ -1,7 +1,7 @@
-use leptos::prelude::*;
+use leptos::{either::EitherOf5, prelude::*};
 use web_sys::{HtmlDivElement, HtmlTextAreaElement};
 
-use crate::Data;
+use crate::{Data, data::serde::LineOutput};
 
 #[component]
 pub fn editor(data: RwSignal<Data>) -> impl IntoView {
@@ -28,9 +28,19 @@ pub fn editor(data: RwSignal<Data>) -> impl IntoView {
         }));
     };
 
+    let lines = view! {
+        <For
+            each=move || {
+                text.with(|t| t.lines().map(|l| Oco::<'static, str>::Owned(l.to_owned())).collect::<Vec<_>>())
+            }
+            key={|x| x.clone()}
+            children=child_fn
+        />
+    };
+
     view! {
         <div id="highlighted" node_ref=node_div>
-            {text}
+            {lines}
         </div>
         <textarea
             bind:value=text
@@ -48,5 +58,22 @@ pub fn editor(data: RwSignal<Data>) -> impl IntoView {
                 })
                 .collect::<Vec<_>>()
         }}
+    }
+}
+
+#[allow(clippy::needless_pass_by_value)]
+fn child_fn(input: Oco<'static, str>) -> impl IntoView {
+    match LineOutput::deserialize(&input) {
+        Ok(LineOutput::Comment) => {
+            EitherOf5::A(view! {<span class="code comment">{input}</span>"\n"})
+        }
+        Ok(LineOutput::Item(_)) => EitherOf5::B(view! {<span class="code item">{input}</span>"\n"}),
+        Ok(LineOutput::Prompt(_)) => {
+            EitherOf5::C(view! {<span class="code prompt">{input}</span>"\n"})
+        }
+        Ok(LineOutput::Parameter(_)) => {
+            EitherOf5::D(view! {<span class="code parameter">{input}</span>"\n"})
+        }
+        Err(_) => EitherOf5::E(view! {<span class="code error">{input}</span>"\n"}),
     }
 }

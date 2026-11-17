@@ -199,8 +199,6 @@ body {
 
 #highlighted {
     pointer-events: none;
-    color: black;
-    background: white;
     overflow: hidden;
 }
 
@@ -220,4 +218,24 @@ body {
     position: relative;
     color: red;
     z-index: 2;
+}
+
+.code.comment {
+    color: gray;
+}
+
+.code.item {
+    color: blue;
+}
+
+.code.prompt {
+    color: green;
+}
+
+.code.parameter {
+    color: orange;
+}
+
+.code.error {
+    color: red;
 }
