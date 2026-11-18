@@ -149,7 +149,7 @@ impl Data {
         let mut last_prompt = None;
         for q in &self.questions {
             if last_prompt != Some(q.prompt_index) {
-                writeln!(output, "/?{}", self.prompts[q.prompt_index]).unwrap();
+                writeln!(output, "/? {}", self.prompts[q.prompt_index]).unwrap();
                 last_prompt = Some(q.prompt_index);
             }
             write_or_escape(&mut output, &q.question);

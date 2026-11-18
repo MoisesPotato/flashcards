@@ -33,8 +33,15 @@ pub enum Parameter {
 #[derive(Debug)]
 pub enum LineOutput {
     Comment,
-    Prompt(String),
-    Parameter(Parameter),
+    Prompt {
+        contents: String,
+        start: usize,
+    },
+    Parameter {
+        value: Parameter,
+        key: (usize, usize),
+        value_bytes: (usize, usize),
+    },
     Item(Item),
 }
 
@@ -51,9 +58,11 @@ impl LineOutput {
                 match chars.next() {
                     None | Some((_, '/')) => Ok(Self::Comment),
                     Some((_, '?')) => {
-                        let prompt = prompt(input, &mut chars);
+                        skip_whitespace(&mut chars);
+                        let start = chars.peek().map_or(input.len(), |x| x.0);
+                        let contents = input[start..].trim().to_owned();
                         // println!("Prompt: {prompt:?}");
-                        Ok(Self::Prompt(prompt))
+                        Ok(Self::Prompt { contents, start })
                     }
                     Some((_, '*')) => data_field(input, &mut chars),
                     Some((_, c)) => Err(Error::from_msg(
@@ -78,14 +87,20 @@ impl Data {
                     err.line = i;
                     errors.push(err);
                 }
-                Ok(LineOutput::Parameter(Parameter::VeryRecent(x))) => {
+                Ok(LineOutput::Parameter {
+                    value: Parameter::VeryRecent(x),
+                    ..
+                }) => {
                     output.very_recent = x;
                 }
-                Ok(LineOutput::Parameter(Parameter::Recent(x))) => {
+                Ok(LineOutput::Parameter {
+                    value: Parameter::Recent(x),
+                    ..
+                }) => {
                     output.recent = x;
                 }
-                Ok(Prompt(p)) => {
-                    output.prompts.push(p);
+                Ok(Prompt { contents, .. }) => {
+                    output.prompts.push(contents);
                 }
                 Ok(LineOutput::Item(mut i)) => {
                     if output.prompts.is_empty() {
@@ -172,14 +187,22 @@ fn data_field(input: &str, chars: &mut Peekable<CharIndices<'_>>) -> Result<Line
     skip_whitespace(chars);
     match ident {
         "very_recent" => match value.parse() {
-            Ok(v) => Ok(LineOutput::Parameter(Parameter::VeryRecent(v))),
+            Ok(v) => Ok(LineOutput::Parameter {
+                value: Parameter::VeryRecent(v),
+                key: (ident_begin, ident_begin + ident.len()),
+                value_bytes: (value_begin, value_begin + value.len()),
+            }),
             Err(err) => Err(Error::from_msg(
                 format!("Couldn't parse {value:?}: {err}"),
                 (value_begin, value_begin + value.len()),
             )),
         },
         "recent" => match value.parse() {
-            Ok(v) => Ok(LineOutput::Parameter(Parameter::Recent(v))),
+            Ok(v) => Ok(LineOutput::Parameter {
+                value: Parameter::Recent(v),
+                key: (ident_begin, ident_begin + ident.len()),
+                value_bytes: (value_begin, value_begin + value.len()),
+            }),
             Err(err) => Err(Error::from_msg(
                 format!("Couldn't parse {value:?}: {err}"),
                 (value_begin, value_begin + value.len()),
@@ -189,20 +212,6 @@ fn data_field(input: &str, chars: &mut Peekable<CharIndices<'_>>) -> Result<Line
             format!("Unkonwn identifier {ident:?}: Possible values are 'very_recent' and 'recent'"),
             (ident_begin, ident_begin + ident.len()),
         )),
-    }
-}
-
-fn prompt(input: &str, chars: &mut Peekable<CharIndices<'_>>) -> String {
-    let beginning = chars.peek().map_or(input.len(), |x| x.0);
-    loop {
-        match chars.next() {
-            None => return input[beginning..].trim().into(),
-            Some((i, '\n')) => {
-                skip_whitespace(chars);
-                return input[beginning..i].trim().into();
-            }
-            Some(_) => {}
-        }
     }
 }
 
@@ -566,4 +575,53 @@ q8,a,0,0,0,0,
             ]
         }
     );
+}
+
+#[derive(Debug)]
+pub enum PromptPiece {
+    Normal(usize, usize),
+    Dollar,
+}
+
+struct PromptIter<'i> {
+    input: &'i str,
+    at: usize,
+}
+
+impl Iterator for PromptIter<'_> {
+    type Item = PromptPiece;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let chars = self.input[self.at..].char_indices();
+        let mut escaping = false;
+
+        if '$' == self.input[self.at..].chars().next()? {
+            self.at += 1;
+            return Some(PromptPiece::Dollar);
+        }
+
+        for (i, c) in chars {
+            match (c, escaping) {
+                ('$', false) => {
+                    self.at += i;
+                    return Some(PromptPiece::Normal(self.at - i, self.at));
+                }
+                (_, true) => {
+                    escaping = false;
+                }
+                ('\\', false) => escaping = true,
+                (_, false) => {}
+            }
+        }
+        let start = self.at;
+        self.at = self.input.len();
+        Some(PromptPiece::Normal(start, self.at))
+    }
+}
+
+pub fn parse_prompt(prompt: &str) -> impl Iterator<Item = PromptPiece> + '_ {
+    PromptIter {
+        input: prompt,
+        at: 0,
+    }
 }

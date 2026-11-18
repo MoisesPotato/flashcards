@@ -222,19 +222,31 @@ body {
 }
 
 .code.comment {
-    color: var(--gray)
+    color: var(--comment)
 }
 
 .code.item {
-    color: var(--blue)
-}
-
-.code.prompt {
     color: var(--green)
 }
 
 .code.parameter {
+    color: var(--black)
+}
+
+.code.parameter>.key {
+    color: var(--cyan)
+}
+
+.code.parameter>.value {
     color: var(--orange)
+}
+
+.code.prompt>.text {
+    color: var(--blue);
+}
+
+.code.prompt>.dollar {
+    color: var(--pink);
 }
 
 .code.error {
