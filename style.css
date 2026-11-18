@@ -215,12 +215,6 @@ body {
     text-decoration: underline wavy red;
 } */
 
-.error-msg {
-    position: relative;
-    color: red;
-    z-index: 2;
-}
-
 .code.comment {
     color: var(--comment)
 }
@@ -249,8 +243,32 @@ body {
     color: var(--pink);
 }
 
+.code.error>.bad {
+    text-decoration: underline wavy var(--red);
+    position: relative;
+}
+
+.code.error>.bad>.error-msg {
+    text-decoration: none;
+}
+
 .code.error {
-    color: var(--red)
+    background: var(--bg3);
+    color: var(--red);
+}
+
+.error-msg {
+    position: absolute;
+    color: var(--red);
+    z-index: 2;
+    background-color: var(--bg1);
+    display: block;
+    width: max-content;
+    padding: 8px;
+    border: 1px solid var(--fg0);
+    border-radius: 2px;
+    top: 11px;
+    left: 0;
 }
 
 :root {

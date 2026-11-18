@@ -6,7 +6,7 @@ use web_sys::{HtmlDivElement, HtmlTextAreaElement};
 
 use crate::{
     Data,
-    data::serde::{LineOutput, PromptPiece, parse_prompt},
+    data::serde::{Error, LineOutput, PromptPiece, parse_prompt},
 };
 
 #[component]
@@ -56,16 +56,8 @@ pub fn editor(data: RwSignal<Data>) -> impl IntoView {
             node_ref=node_area
             on:scroll=on_scroll
             on:input=on_input
+            spellcheck="false"
         ></textarea>
-        {move || {
-            errors
-                .get()
-                .iter()
-                .map(move |error| {
-                    view! { <p class="error-msg">{error.msg.clone()}</p> }
-                })
-                .collect::<Vec<_>>()
-        }}
     }
 }
 
@@ -84,10 +76,21 @@ fn child_fn(input: Oco<'static, str>) -> impl IntoView {
         Ok(LineOutput::Parameter {
             key, value_bytes, ..
         }) => EitherOf5::D(display_param(&input, key, value_bytes)),
-        Err(_) => EitherOf5::E(view! {
-            <span class="code error">{input}</span>
-            "\n"
-        }),
+        Err(Error {
+            msg, byte_index, ..
+        }) => EitherOf5::E(display_error(&input, msg, byte_index)),
+    }
+}
+
+fn display_error(input: &str, msg: String, byte_index: (usize, usize)) -> impl IntoView + 'static {
+    let before = input[..byte_index.0].to_owned();
+    let bad = input[byte_index.0..byte_index.1].to_owned();
+    let after = input[byte_index.1..].to_owned();
+    view! {
+        <span class="code error">
+            {before} <span class="bad">{bad} <p class="error-msg">{msg}</p></span> {after}
+        </span>
+        "\n"
     }
 }
 
