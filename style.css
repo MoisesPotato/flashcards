@@ -200,6 +200,7 @@ body {
 #highlighted {
     pointer-events: none;
     overflow: hidden;
+    background-color: var(--bg0);
 }
 
 #q-input {
@@ -221,21 +222,50 @@ body {
 }
 
 .code.comment {
-    color: gray;
+    color: var(--gray)
 }
 
 .code.item {
-    color: blue;
+    color: var(--blue)
 }
 
 .code.prompt {
-    color: green;
+    color: var(--green)
 }
 
 .code.parameter {
-    color: orange;
+    color: var(--orange)
 }
 
 .code.error {
-    color: red;
+    color: var(--red)
+}
+
+:root {
+    /* These are the colors in nightfox.nvim
+    https://github.com/EdenEast/nightfox.nvim */
+    --black: #352c24;
+    --red: #a5222f;
+    --green: #396847;
+    --yellow: #AC5402;
+    --blue: #2848a9;
+    --magenta: #6e33ce;
+    --cyan: #287980;
+    --white: #f2e9e1;
+    --orange: #955f61;
+    --pink: #a440b5;
+
+    --comment: #837a72;
+    --bg0: #e4dcd4;
+    --bg1: #f6f2ee;
+    --bg2: #dbd1dd;
+    --bg3: #d3c7bb;
+    --bg4: #aab0ad;
+    --fg0: #302b5d;
+    --fg1: #3d2b5a;
+    --fg2: #643f61;
+    --fg3: #824d5b;
+    --sel0: #e7d2be;
+    --sel1: #a4c1c2;
+
 }
