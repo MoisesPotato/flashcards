@@ -42,7 +42,11 @@ pub enum LineOutput {
         key: (usize, usize),
         value_bytes: (usize, usize),
     },
-    Item(Item),
+    Item {
+        value: Item,
+        q_span: (usize, usize),
+        a_span: (usize, usize),
+    },
 }
 
 impl LineOutput {
@@ -102,7 +106,7 @@ impl Data {
                 Ok(Prompt { contents, .. }) => {
                     output.prompts.push(contents);
                 }
-                Ok(LineOutput::Item(mut i)) => {
+                Ok(LineOutput::Item { value: mut i, .. }) => {
                     if output.prompts.is_empty() {
                         output.prompts.push("$".into());
                     }
@@ -216,14 +220,16 @@ fn data_field(input: &str, chars: &mut Peekable<CharIndices<'_>>) -> Result<Line
 }
 
 fn normal_line(input: &str, chars: &mut Peekable<CharIndices<'_>>) -> Result<LineOutput, Error> {
-    let beginning = chars.peek().expect("Can it be empty here?").0;
+    skip_whitespace(chars);
+    let q_start = chars.peek().expect("Can it be empty here?").0;
+    let question = field(chars)?.expect("Can it be empty here?");
     let mut output = Item {
-        question: field(chars)?.expect("Can it be empty here?"),
+        question,
         answers: {
             field(chars)?.ok_or_else(|| {
                 Error::from_msg(
                     "Question without answer",
-                    (beginning, chars.peek().map_or(input.len(), |x| x.0)),
+                    (q_start, chars.peek().map_or(input.len(), |x| x.0)),
                 )
             })?
         },
@@ -281,7 +287,7 @@ fn field(chars: &mut Peekable<CharIndices<'_>>) -> Result<Option<String>, Error>
         Some((beginning, '"')) => field_in_quotes(chars, beginning),
         Some((_, _)) => loop {
             match chars.peek().copied() {
-                None | Some((_, '\n')) => {
+                None => {
                     return Ok(Some(trim_right(output)));
                 }
                 Some((_, ',')) => {
@@ -303,7 +309,7 @@ fn field(chars: &mut Peekable<CharIndices<'_>>) -> Result<Option<String>, Error>
                         Some((_, c @ ('"' | '\\'))) => output.push(c),
                         Some((_, 'n')) => {
                             return Err(Error::from_msg(
-                                "New lines are not allowed in questinos of answers",
+                                "New lines are not allowed in questions or answers",
                                 (i, i + 2),
                             ));
                         }
