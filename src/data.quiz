@@ -1,5 +1,6 @@
-// Very recent: 75, Recent: 150
-//?What is the capital of $?
+/* very_recent: 75
+/* recent: 150
+/? What is the capital of $?
 Afghanistan,Kabul
 Albania,Tirana
 Algeria,Algiers
@@ -196,7 +197,7 @@ Vietnam,Hanoi
 Yemen,Sana'a
 Zambia,Lusaka
 Zimbabwe,Harare
-//?Name the flag $:
+/? Name the flag $:
 🇦🇫,Afghanistan
 🇦🇱,Albania
 🇩🇿,Algeria

@@ -1,2 +1,6 @@
 - highlight / in answers
 - stats
+- Include helpful comments in serialization
+- Validate data: very_recent <  items.len() and recent
+- Include more parameters
+- Go to main menu

@@ -14,6 +14,7 @@ pub mod serde;
 pub struct Data {
     pub very_recent: usize,
     pub recent: usize,
+    pub total_questions: usize,
     pub prompts: Vec<String>,
     pub questions: Vec<Item>,
 }
@@ -25,7 +26,7 @@ pub struct Item {
     pub answers: String,
     pub attempts: usize,
     pub errors: usize,
-    pub last_attempt: usize,
+    pub last_attempt_i: usize,
     pub streak: usize,
 }
 
@@ -68,9 +69,12 @@ impl Item {
         }
     }
 
-    fn weight(&self, very_recent: usize, recent: usize) -> f32 {
-        assert!(very_recent <= recent);
-        if self.last_attempt <= very_recent {
+    fn weight(&self, very_recent: usize, recent: usize, total_asked: usize) -> f32 {
+        assert!(
+            very_recent <= recent,
+            "Very recent: {very_recent}, recent: {recent}"
+        );
+        if self.last_attempt_i + very_recent > total_asked {
             return 0.;
         }
 
@@ -86,8 +90,12 @@ impl Item {
 
         output += err.sqrt() * 10.;
 
-        if self.last_attempt < recent {
-            output *= ((recent - self.last_attempt) as f32 / (recent - very_recent) as f32).powi(2);
+        if self.last_attempt_i + recent < total_asked {
+            // I want this to be 1 when
+            // self.last_attempt_i + recent TODO
+            output *= ((total_asked - recent - self.last_attempt_i) as f32
+                / (recent - very_recent) as f32)
+                .powi(2);
         }
 
         if self.errors * 20 < self.attempts {
