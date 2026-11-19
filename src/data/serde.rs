@@ -117,10 +117,14 @@ impl Data {
             }
         }
 
+        output.total_asked = 0;
+
         for q in &output.questions {
             debug_assert_eq!(q.question, q.question.trim(), "Questions have whitespace");
             debug_assert_eq!(q.answers, q.answers.trim(), "Answers have whitespace");
+            output.total_asked += q.attempts;
         }
+
         for p in &output.prompts {
             debug_assert_eq!(p, p.trim(), "Prompts have whitespace");
         }
@@ -238,7 +242,7 @@ fn normal_line(input: &str, chars: &mut Peekable<CharIndices<'_>>) -> Result<Lin
 
     output.attempts = field_number(input, chars)?.unwrap_or_default();
     output.errors = field_number(input, chars)?.unwrap_or_default();
-    output.last_attempt = field_number(input, chars)?.unwrap_or_default();
+    output.last_attempt = field_number(input, chars)?.and_then(|x| x.try_into().ok());
     output.streak = field_number(input, chars)?.unwrap_or(if output.errors == 0 {
         output.attempts
     } else {
@@ -474,6 +478,7 @@ fn fuzzed_serialized() {
         Data {
             very_recent: 0,
             recent: 0,
+            total_asked: 13_589_282_577_500,
             prompts: vec![String::new()],
             questions: vec![
                 Item {
@@ -482,18 +487,9 @@ fn fuzzed_serialized() {
                     answers: "\\\0".into(),
                     attempts: 13_589_282_577_500,
                     errors: 6_081_631_320_437,
-                    last_attempt: 0,
-                    streak: 0,
+                    ..Default::default()
                 },
-                Item {
-                    prompt_index: 0,
-                    question: String::new(),
-                    answers: String::new(),
-                    attempts: 0,
-                    errors: 0,
-                    last_attempt: 0,
-                    streak: 0,
-                },
+                Item::default(),
             ],
         },
         Data {
@@ -580,6 +576,7 @@ q8,a,0,0,0,0,
         Data {
             very_recent: 0,
             recent: 0,
+            total_asked: 0,
             prompts: vec!["$".into()],
             questions: vec![
                 Item::new("q1", "a"),

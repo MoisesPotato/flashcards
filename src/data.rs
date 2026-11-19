@@ -1,4 +1,4 @@
-use std::{cmp, collections::BTreeMap, fmt::Write, fs};
+use std::{cmp, collections::BTreeMap, fmt::Write, fs, num::NonZeroUsize};
 
 use Outcome::{Almost, Correct, Wrong};
 use rand::{RngExt, rng};
@@ -14,7 +14,7 @@ pub mod serde;
 pub struct Data {
     pub very_recent: usize,
     pub recent: usize,
-    pub total_questions: usize,
+    pub total_asked: usize,
     pub prompts: Vec<String>,
     pub questions: Vec<Item>,
 }
@@ -26,7 +26,7 @@ pub struct Item {
     pub answers: String,
     pub attempts: usize,
     pub errors: usize,
-    pub last_attempt_i: usize,
+    pub last_attempt: Option<NonZeroUsize>,
     pub streak: usize,
 }
 
@@ -74,7 +74,10 @@ impl Item {
             very_recent <= recent,
             "Very recent: {very_recent}, recent: {recent}"
         );
-        if self.last_attempt_i + very_recent > total_asked {
+        if self
+            .last_attempt
+            .is_some_and(|a| usize::from(a) + very_recent >= total_asked)
+        {
             return 0.;
         }
 
@@ -90,17 +93,28 @@ impl Item {
 
         output += err.sqrt() * 10.;
 
-        if self.last_attempt_i + recent < total_asked {
+        debug_assert!(output.is_finite());
+
+        if let Some(a) = self.last_attempt
+            && usize::from(a) + recent < total_asked
+        {
+            debug_assert!(very_recent < recent);
             // I want this to be 1 when
-            // self.last_attempt_i + recent TODO
-            output *= ((total_asked - recent - self.last_attempt_i) as f32
+            // self.last_attempt + recent = total_asked
+            // And 0 when
+            // self.last_attempt + very_recent - total_asked
+            output *= ((total_asked - very_recent - usize::from(a)) as f32
                 / (recent - very_recent) as f32)
                 .powi(2);
         }
 
+        debug_assert!(output.is_finite());
+
         if self.errors * 20 < self.attempts {
             output /= self.attempts as f32;
         }
+
+        debug_assert!(output.is_finite());
 
         output /= self.streak as f32 + 1.;
 
@@ -167,7 +181,10 @@ impl Data {
             writeln!(
                 output,
                 "{},{},{},{}",
-                q.attempts, q.errors, q.last_attempt, q.streak
+                q.attempts,
+                q.errors,
+                q.last_attempt.map_or(0, usize::from),
+                q.streak
             )
             .unwrap();
         }
@@ -289,7 +306,7 @@ impl Data {
         let total_weight: f32 = self
             .questions
             .iter()
-            .map(|i| i.weight(self.very_recent, self.recent))
+            .map(|i| i.weight(self.very_recent, self.recent, self.total_asked))
             .sum();
 
         let chosen = rng().random_range(0. ..total_weight);
@@ -297,21 +314,13 @@ impl Data {
         let mut so_far = 0.;
 
         for (i, c) in self.questions.iter().enumerate() {
-            so_far += c.weight(self.very_recent, self.recent);
+            so_far += c.weight(self.very_recent, self.recent, self.total_asked);
             if so_far >= chosen {
                 return i;
             }
         }
 
         unreachable!("Weight too big")
-    }
-
-    pub(crate) fn step_all(&mut self) {
-        for i in &mut self.questions {
-            if i.last_attempt < self.recent {
-                i.last_attempt += 1;
-            }
-        }
     }
 }
 
@@ -358,6 +367,7 @@ fn ser_deser() {
     let test = Data {
         very_recent: 10,
         recent: 20,
+        total_asked: 4,
         prompts: vec!["question $?".into(), "Or $?".into()],
         questions: vec![
             Item {
@@ -366,7 +376,7 @@ fn ser_deser() {
                 answers: "Kabul/kabul".into(),
                 attempts: 1,
                 errors: 0,
-                last_attempt: 3,
+                last_attempt: Some(NonZeroUsize::try_from(1).unwrap()),
                 streak: 1,
             },
             Item {
@@ -375,7 +385,7 @@ fn ser_deser() {
                 answers: "Dublin/Dopolin".into(),
                 attempts: 3,
                 errors: 2,
-                last_attempt: 5,
+                last_attempt: Some(NonZeroUsize::try_from(4).unwrap()),
                 streak: 0,
             },
         ],
@@ -397,11 +407,11 @@ fn ser_deser() {
 
     let test_2 = r#"/* very_recent: 75
 /* recent: 150
-/?What is the capital of $?
+/? What is the capital of $?
 Afghanistan,kabul,6,0,150,6
 Albania,tirana,2,0,150,2
 Comma country,"comma,city",1,1,147,1
-/?Name the flag $:
+/? Name the flag $:
 🇦🇫,Afghanistan,9,1,84,2
 🇦🇱,Albania,3,0,127,3
 🇫🇮,Finland,2,0,150,2

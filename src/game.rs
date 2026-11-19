@@ -1,3 +1,5 @@
+use std::num::NonZeroUsize;
+
 use leptos::{either::EitherOf3, ev::SubmitEvent, html, logging::error, prelude::*};
 use web_sys::{HtmlElement, console};
 
@@ -65,6 +67,8 @@ pub fn Game(data: RwSignal<Data>) -> impl IntoView {
             }
 
             data.update(move |data| {
+                let asked_i = NonZeroUsize::try_from(data.total_asked + 1).unwrap();
+
                 let item = data.get_mut_item(question.get_untracked());
                 match outcome {
                     Correct => {
@@ -83,8 +87,8 @@ pub fn Game(data: RwSignal<Data>) -> impl IntoView {
                 }
                 // Reset
                 item.attempts += 1;
-                item.last_attempt = 0;
-                data.step_all();
+                item.last_attempt = Some(asked_i);
+                data.total_asked += 1;
 
                 set_answer(None);
                 set_almost(false);
