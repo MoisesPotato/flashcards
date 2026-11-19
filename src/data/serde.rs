@@ -222,17 +222,17 @@ fn data_field(input: &str, chars: &mut Peekable<CharIndices<'_>>) -> Result<Line
 fn normal_line(input: &str, chars: &mut Peekable<CharIndices<'_>>) -> Result<LineOutput, Error> {
     skip_whitespace(chars);
     let q_start = chars.peek().expect("Can it be empty here?").0;
-    let question = field(chars)?.expect("Can it be empty here?");
+    let (question, q_end) = field(chars)?.expect("Can it be empty here?");
+    skip_whitespace(chars);
+    let a_start = chars
+        .peek()
+        .ok_or_else(|| Error::from_msg("Question without answer", (q_start, q_end)))?
+        .0;
+
+    let (answers, a_end) = field(chars)?.expect("Checked empty above");
     let mut output = Item {
         question,
-        answers: {
-            field(chars)?.ok_or_else(|| {
-                Error::from_msg(
-                    "Question without answer",
-                    (q_start, chars.peek().map_or(input.len(), |x| x.0)),
-                )
-            })?
-        },
+        answers,
         ..Item::default()
     };
 
@@ -247,7 +247,11 @@ fn normal_line(input: &str, chars: &mut Peekable<CharIndices<'_>>) -> Result<Lin
 
     // println!("{output:#?}");
 
-    Ok(LineOutput::Item(output))
+    Ok(LineOutput::Item {
+        value: output,
+        q_span: (q_start, q_end),
+        a_span: (a_start, a_end),
+    })
 }
 
 fn field_number(
@@ -280,24 +284,23 @@ fn field_number(
     }
 }
 
-fn field(chars: &mut Peekable<CharIndices<'_>>) -> Result<Option<String>, Error> {
+fn field(chars: &mut Peekable<CharIndices<'_>>) -> Result<Option<(String, usize)>, Error> {
     let mut output = String::new();
+    let mut last = 0;
     match chars.peek().copied() {
         None => Ok(None),
         Some((beginning, '"')) => field_in_quotes(chars, beginning),
         Some((_, _)) => loop {
             match chars.peek().copied() {
                 None => {
-                    return Ok(Some(trim_right(output)));
+                    return Ok(Some((trim_end(output), last)));
                 }
-                Some((_, ',')) => {
+                Some((i, ',')) => {
                     chars.next();
                     skip_whitespace(chars);
-                    return Ok(Some(trim_right(output)));
+                    return Ok(Some((trim_end(output), i)));
                 }
                 Some((i, '"')) => {
-                    chars.next();
-                    skip_whitespace(chars);
                     return Err(Error::from_msg(
                         "Quotes are not allowed in questions or answers. Use '\\\"'",
                         (i, i + 1),
@@ -306,7 +309,10 @@ fn field(chars: &mut Peekable<CharIndices<'_>>) -> Result<Option<String>, Error>
                 Some((i, '\\')) => {
                     chars.next();
                     match chars.next() {
-                        Some((_, c @ ('"' | '\\'))) => output.push(c),
+                        Some((i, c @ ('"' | '\\'))) => {
+                            last = i;
+                            output.push(c);
+                        }
                         Some((_, 'n')) => {
                             return Err(Error::from_msg(
                                 "New lines are not allowed in questions or answers",
@@ -324,8 +330,13 @@ fn field(chars: &mut Peekable<CharIndices<'_>>) -> Result<Option<String>, Error>
                         }
                     }
                 }
-                Some((_, c)) => {
+                Some((_, c)) if c.is_whitespace() => {
                     chars.next();
+                    output.push(c);
+                }
+                Some((i, c)) => {
+                    chars.next();
+                    last = i;
                     output.push(c);
                 }
             }
@@ -333,7 +344,7 @@ fn field(chars: &mut Peekable<CharIndices<'_>>) -> Result<Option<String>, Error>
     }
 }
 
-fn trim_right(mut output: String) -> String {
+fn trim_end(mut output: String) -> String {
     while let Some(c) = output.pop() {
         if !c.is_whitespace() {
             output.push(c);
@@ -346,10 +357,11 @@ fn trim_right(mut output: String) -> String {
 fn field_in_quotes(
     chars: &mut Peekable<CharIndices<'_>>,
     beginning: usize,
-) -> Result<Option<String>, Error> {
+) -> Result<Option<(String, usize)>, Error> {
     let mut output = String::new();
     chars.next();
     skip_whitespace(chars);
+
     loop {
         let Some((i, c)) = chars.next() else {
             return Err(Error::from_msg("Unclosed \"", (beginning, beginning + 1)));
@@ -370,7 +382,7 @@ fn field_in_quotes(
                         ));
                     }
                 }
-                return Ok(Some(trim_right(output)));
+                return Ok(Some((trim_end(output), i + 1)));
             }
             '\n' => {
                 return Err(Error::from_msg(

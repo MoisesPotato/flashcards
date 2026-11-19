@@ -220,6 +220,14 @@ body {
 }
 
 .code.item {
+    color: var(--orange)
+}
+
+.code.item>.question {
+    color: var(--cyan)
+}
+
+.code.item>.answer {
     color: var(--green)
 }
 
@@ -228,11 +236,11 @@ body {
 }
 
 .code.parameter>.key {
-    color: var(--cyan)
+    color: var(--blue)
 }
 
 .code.parameter>.value {
-    color: var(--orange)
+    color: var(--yellow)
 }
 
 .code.prompt>.text {

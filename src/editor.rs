@@ -1,3 +1,5 @@
+use std::array;
+
 use leptos::{
     either::{EitherOf3, EitherOf5},
     prelude::*,
@@ -68,10 +70,9 @@ fn child_fn(input: Oco<'static, str>) -> impl IntoView {
             <span class="code comment">{input}</span>
             "\n"
         }),
-        Ok(LineOutput::Item(_)) => EitherOf5::B(view! {
-            <span class="code item">{input}</span>
-            "\n"
-        }),
+        Ok(LineOutput::Item { q_span, a_span, .. }) => {
+            EitherOf5::B(display_flashcard(&input, q_span, a_span))
+        }
         Ok(LineOutput::Prompt { start, .. }) => EitherOf5::C(display_prompt(&input, start)),
         Ok(LineOutput::Parameter {
             key, value_bytes, ..
@@ -82,10 +83,37 @@ fn child_fn(input: Oco<'static, str>) -> impl IntoView {
     }
 }
 
+fn split_string<const N: usize>(input: &str, indices: [usize; N]) -> (String, [String; N]) {
+    (
+        input[0..indices[0]].to_owned(),
+        array::from_fn(|i| {
+            let slice = if i + 1 < N {
+                &input[indices[i]..indices[i + 1]]
+            } else {
+                &input[indices[i]..]
+            };
+            slice.to_owned()
+        }),
+    )
+}
+
+fn display_flashcard(
+    input: &str,
+    q_span: (usize, usize),
+    a_span: (usize, usize),
+) -> impl IntoView + 'static {
+    let (before, [q, between, a, after]) =
+        split_string(input, [q_span.0, q_span.1, a_span.0, a_span.1]);
+    view! {
+        <span class="code item">
+            {before} <span class="question">{q}</span> {between} <span class="answer">{a}</span>
+            {after}
+        </span>
+        "\n"
+    }
+}
 fn display_error(input: &str, msg: String, byte_index: (usize, usize)) -> impl IntoView + 'static {
-    let before = input[..byte_index.0].to_owned();
-    let bad = input[byte_index.0..byte_index.1].to_owned();
-    let after = input[byte_index.1..].to_owned();
+    let (before, [bad, after]) = split_string(input, byte_index.into());
     view! {
         <span class="code error">
             {before} <span class="bad">{bad} <p class="error-msg">{msg}</p></span> {after}
@@ -99,11 +127,8 @@ fn display_param(
     key_span: (usize, usize),
     value_span: (usize, usize),
 ) -> impl IntoView + 'static {
-    let before_key = line[..key_span.0].to_owned();
-    let key = line[key_span.0..key_span.1].to_owned();
-    let semicolon = line[key_span.1..value_span.0].to_owned();
-    let value = line[value_span.0..value_span.1].to_owned();
-    let end = line[value_span.1..].to_owned();
+    let (before_key, [key, semicolon, value, end]) =
+        split_string(line, [key_span.0, key_span.1, value_span.0, value_span.1]);
     view! {
         <span class="code parameter">
             {before_key} <span class="key">{key}</span> {semicolon}
